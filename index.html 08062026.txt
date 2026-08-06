@@ -1,0 +1,2179 @@
+  <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calorie Journal</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <style>
+    :root{color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0}
+    .app{max-width:620px;margin:0 auto;padding:20px}
+    h1{margin:8px 0 16px;font-size:28px}
+    h2{margin:0 0 10px;font-size:18px}
+    .card{background:#111827;border:1px solid #334155;border-radius:18px;padding:16px;margin-bottom:16px}
+    label{display:block;font-size:13px;opacity:.75;margin:10px 0 6px}
+    input,textarea,select{width:100%;border:1px solid #475569;background:#0b1220;color:inherit;border-radius:12px;padding:12px;font:inherit}
+    textarea{min-height:90px;resize:vertical}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    button{border:0;border-radius:12px;padding:12px 14px;font:inherit;cursor:pointer}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .primary{width:100%;background:#22c55e;color:#052e16;font-weight:700;margin-top:14px}
+    .secondary{width:100%;background:#334155;color:#e2e8f0;font-weight:600;margin-top:10px}
+    .small{background:#334155;color:#e2e8f0;padding:8px 10px}
+    .danger{background:#7f1d1d;color:#fecaca;padding:8px 10px}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+    @media(max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}}
+    .stat{background:#111827;border:1px solid #334155;border-radius:18px;padding:12px 8px;text-align:center}
+    .stat span{display:block;font-size:20px;font-weight:800;margin-bottom:4px}
+    .stat small{opacity:.7}
+    .progress{height:14px;background:#1e293b;border-radius:999px;overflow:hidden;margin-bottom:16px}
+    .bar{height:100%;width:0%;background:#22c55e;transition:width .25s}
+    .over{background:#ef4444}
+    .entry{border:1px solid #334155;border-radius:14px;padding:12px;margin-bottom:10px;background:#0b1220}
+    .entry-top{display:flex;justify-content:space-between;gap:10px;align-items:start}
+    .entry strong{word-break:break-word}
+    .muted{opacity:.72;font-size:14px;margin-top:6px;white-space:pre-wrap;word-break:break-word}
+    .list-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+    .list-head h2{margin:0;font-size:18px}
+    .empty{opacity:.65}
+    .small-note{opacity:.65;font-size:12px;margin-top:6px}
+    .preview-item{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #334155}
+    .preview-item:last-child{border-bottom:0}
+    .preview-calories{font-weight:800;white-space:nowrap}
+    .preview-note{font-size:12px;opacity:.65;margin-top:4px}
+    .preview-total{display:flex;justify-content:space-between;gap:12px;padding-top:12px;margin-top:8px;border-top:1px solid #475569;font-weight:900}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+    [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🍽️ Calorie Journal</h1>
+
+    <section class="card">
+      <label for="date">Date</label>
+      <input id="date" type="date" />
+      <label for="goal">Daily calorie goal</label>
+      <input id="goal" type="number" min="0" step="10" />
+    </section>
+
+    <section class="stats">
+      <div class="stat"><span id="foodStat">0</span><small>Food</small></div>
+      <div class="stat"><span id="burnStat">0</span><small>Exercise</small></div>
+      <div class="stat"><span id="goalStat">0</span><small>Goal</small></div>
+      <div class="stat"><span id="remaining">0</span><small>Remaining</small></div>
+    </section>
+
+    <div class="progress"><div id="bar" class="bar"></div></div>
+    <div id="macroSummary" class="small-note" style="margin-bottom:12px;"></div>
+
+    <section class="card" id="aiSettingsCard">
+      <h2>AI settings</h2>
+      <label for="openrouterKey">OpenRouter API key</label>
+      <input id="openrouterKey" type="password" placeholder="sk-or-v1-..." autocomplete="off" />
+      <label for="openrouterModel">Model</label>
+      <input id="openrouterModel" value="openrouter/free" autocomplete="off" />
+      <div class="small-note">
+        For Qwen, paste a Qwen model ID from OpenRouter. Otherwise leave openrouter/free.
+        For personal use only — do not share this file with your key saved inside.
+      </div>
+      <button id="saveAiSettingsBtn" class="secondary" type="button">Save AI settings</button>
+      <div id="aiStatus" class="small-note"></div>
+    </section>
+
+    <section class="card" id="aiSavedBar" hidden>
+      <div class="list-head">
+        <h2>AI settings saved</h2>
+        <button id="editAiSettingsBtn" class="small" type="button">Change</button>
+      </div>
+      <div class="small-note">Meal estimates will use your saved OpenRouter key.</div>
+    </section>
+
+    <section class="card">
+      <h2>Describe your meal</h2>
+      <label for="mealText">What did you eat or drink?</label>
+      <textarea id="mealText" placeholder="Example: 2 eggs, toast with butter, coffee with milk"></textarea>
+      <div class="small-note">
+        If an OpenRouter API key is saved, AI estimation is used. Otherwise the local offline estimator is used.
+      </div>
+      <button id="estimateBtn" class="primary" type="button">Estimate calories</button>
+      <div id="estimatePreview" hidden></div>
+      <div class="actions">
+        <button id="addOneBtn" class="secondary" type="button" disabled>Add as one entry</button>
+        <button id="addSeparateBtn" class="secondary" type="button" disabled>Add items separately</button>
+      </div>
+    </section>
+
+    <form id="manualForm" class="card">
+      <h2>Manual food add</h2>
+      <label for="manualFood">Food</label>
+      <input id="manualFood" placeholder="e.g. Greek yogurt bowl" required />
+      <div class="row" style="grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <label for="manualCalories">Calories</label>
+          <input id="manualCalories" type="number" min="0" step="1" placeholder="450" required />
+        </div>
+        <div>
+          <label for="manualProtein">Protein g</label>
+          <input id="manualProtein" type="number" min="0" step="0.1" placeholder="30" />
+        </div>
+        <div>
+          <label for="manualFat">Fat g</label>
+          <input id="manualFat" type="number" min="0" step="0.1" placeholder="10" />
+        </div>
+      </div>
+      <label for="manualNotes">Notes</label>
+      <textarea id="manualNotes" placeholder="Optional notes..."></textarea>
+      <button class="primary" type="submit">Add food</button>
+    </form>
+
+    <form id="exerciseForm" class="card">
+      <h2>Add exercise</h2>
+      <label for="exerciseName">Activity</label>
+      <input id="exerciseName" placeholder="e.g. Brisk walk" required />
+      <div class="row">
+        <div>
+          <label for="exerciseCalories">Calories burned</label>
+          <input id="exerciseCalories" type="number" min="0" step="1" placeholder="200" required />
+        </div>
+        <div>
+          <label for="exerciseMinutes">Minutes (optional)</label>
+          <input id="exerciseMinutes" type="number" min="0" step="1" placeholder="30" />
+        </div>
+      </div>
+      <div class="small-note">
+        Rough guide: 30 min brisk walk ≈ 150–200 cal • 30 min jog ≈ 300 cal • 30 min cycling ≈ 250 cal
+      </div>
+      <button class="primary" type="submit">Add exercise</button>
+    </form>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>💧 Water</h2>
+        <select id="waterUnit" style="width:auto;">
+          <option value="ml">ml</option>
+          <option value="oz">oz</option>
+        </select>
+      </div>
+      <div class="actions" style="margin-top:0;">
+        <button id="waterCupBtn" class="secondary" type="button" style="margin-top:0;">+ Cup (250 ml)</button>
+        <button id="waterBottleBtn" class="secondary" type="button" style="margin-top:0;">+ Bottle (500 ml)</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="waterCustom">Custom amount</label>
+          <input id="waterCustom" type="number" min="0" step="10" placeholder="300" />
+        </div>
+        <div>
+          <label for="waterGoal">Daily goal</label>
+          <input id="waterGoal" type="number" min="0" step="50" />
+        </div>
+      </div>
+      <button id="waterAddBtn" class="primary" type="button">Add water</button>
+      <div class="progress" style="margin-top:12px;margin-bottom:6px;">
+        <div id="waterBar" class="bar" style="background:#38bdf8;"></div>
+      </div>
+      <div id="waterSummary" class="small-note"></div>
+      <div id="waterList" style="margin-top:10px;"></div>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>Weight & trend</h2>
+        <button id="exportWeightsBtn" class="small" type="button">Export CSV</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="weightDate">Date</label>
+          <input id="weightDate" type="date" />
+        </div>
+        <div>
+          <label for="weightValue">Weight</label>
+          <input id="weightValue" type="number" min="0" step="0.1" placeholder="70.0" />
+        </div>
+      </div>
+      <label for="weightUnit">Unit</label>
+      <select id="weightUnit">
+        <option value="kg">kg</option>
+        <option value="lb">lb</option>
+      </select>
+      <button id="addWeightBtn" class="primary" type="button">Log weight</button>
+      <div id="weightSummary" class="small-note"></div>
+      <canvas id="weightChart" style="width:100%;height:220px;display:block;margin-top:12px;"></canvas>
+      <div id="weightChartNote" class="small-note"></div>
+      <div id="weightList" style="margin-top:12px;"></div>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>Entries</h2>
+        <button id="exportBtn" class="small" type="button">Export CSV</button>
+      </div>
+      <div id="entries"></div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "calorie-journal-entries-v2";
+    const GOAL_KEY = "calorie-journal-goal-v2";
+    const OPENROUTER_KEY_STORAGE = "openrouter-key-v1";
+    const OPENROUTER_MODEL_STORAGE = "openrouter-model-v1";
+    const WEIGHTS_KEY = "calorie-journal-weights-v1";
+    const WEIGHT_UNIT_KEY = "calorie-journal-weight-unit-v1";
+    const WATER_KEY = "calorie-journal-water-v1";
+    const WATER_GOAL_KEY = "calorie-journal-water-goal-v1";
+    const WATER_UNIT_KEY = "calorie-journal-water-unit-v1";
+
+    const FOOD_DB = [
+      { name: "Diet soda", keywords: ["diet soda", "diet coke", "coke zero", "zero soda"], defaultCalories: 0 },
+      { name: "Sweet tea", keywords: ["sweet tea"], defaultCalories: 90, perCup: 90 },
+      { name: "Water", keywords: ["water", "sparkling water"], defaultCalories: 0 },
+      { name: "Mac and cheese", keywords: ["macaroni cheese", "mac and cheese", "macaroni"], perCup: 300, defaultCalories: 300 },
+      { name: "Egg fried rice", keywords: ["egg fried rice"], perCup: 300, defaultCalories: 300 },
+      { name: "Fried rice", keywords: ["fried rice"], perCup: 250, per100g: 160, defaultCalories: 250, type: "weight" },
+      { name: "Tikka masala", keywords: ["tikka masala"], perCup: 300, defaultCalories: 300 },
+      { name: "Pad thai", keywords: ["pad thai"], perCup: 350, defaultCalories: 350 },
+      { name: "Lasagna", keywords: ["lasagna", "lasagne"], defaultCalories: 350, unitCalories: 350 },
+      { name: "Curry", keywords: ["curry"], perCup: 250, defaultCalories: 250 },
+      { name: "Stir fry", keywords: ["stir fry", "stir-fry"], perCup: 300, defaultCalories: 300 },
+      { name: "Casserole", keywords: ["casserole"], perCup: 350, defaultCalories: 350 },
+      { name: "Egg white", keywords: ["egg white", "egg whites"], unitCalories: 17, defaultCalories: 17 },
+      { name: "Egg", keywords: ["egg", "eggs"], unitCalories: 70, defaultCalories: 70, unitLabel: "large" },
+      { name: "Omelette", keywords: ["omelet", "omelette"], unitCalories: 150, defaultCalories: 150 },
+      { name: "Bacon", keywords: ["bacon"], perSlice: 45, unitCalories: 45, perPiece: 45, defaultCalories: 90 },
+      { name: "Chicken breast", keywords: ["chicken breast", "chicken breasts", "chicken"], per100g: 165, cupGrams: 140, defaultCalories: 165, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Chicken thigh", keywords: ["chicken thigh", "chicken thighs"], per100g: 210, defaultCalories: 210, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Turkey", keywords: ["turkey"], per100g: 135, defaultCalories: 135, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Beef", keywords: ["beef", "steak", "ground beef", "burger patty"], per100g: 250, defaultCalories: 250, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Pork", keywords: ["pork", "ham"], per100g: 240, defaultCalories: 240, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Salmon", keywords: ["salmon"], per100g: 208, defaultCalories: 208, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "White fish", keywords: ["fish", "cod", "tilapia"], per100g: 120, defaultCalories: 120, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Shrimp", keywords: ["shrimp", "prawn", "prawns"], per100g: 99, defaultCalories: 99, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Tofu", keywords: ["tofu"], per100g: 76, defaultCalories: 150, type: "weight", withQty: 100, withUnit: "g" },
+      { name: "Sausage", keywords: ["sausage", "sausages"], unitCalories: 150, perPiece: 150, defaultCalories: 150 },
+      { name: "Meatballs", keywords: ["meatball", "meatballs"], unitCalories: 50, perPiece: 50, defaultCalories: 200 },
+      { name: "Chicken nuggets", keywords: ["chicken nugget", "chicken nuggets", "nuggets"], unitCalories: 45, perPiece: 45, defaultCalories: 270 },
+      { name: "Brown rice", keywords: ["brown rice"], per100g: 111, perCup: 170, defaultCalories: 170, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "White rice", keywords: ["rice", "white rice"], per100g: 130, perCup: 200, defaultCalories: 200, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Quinoa", keywords: ["quinoa"], per100g: 120, perCup: 220, defaultCalories: 220, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Pasta", keywords: ["pasta", "spaghetti", "noodles"], per100g: 131, perCup: 200, defaultCalories: 200, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Oatmeal", keywords: ["oatmeal"], per100g: 70, perCup: 150, defaultCalories: 150, type: "weight" },
+      { name: "Oats", keywords: ["oats"], per100g: 380, perCup: 300, defaultCalories: 150, type: "weight" },
+      { name: "Cereal", keywords: ["cereal"], perCup: 120, defaultCalories: 120 },
+      { name: "Granola", keywords: ["granola"], per100g: 480, perCup: 450, defaultCalories: 200 },
+      { name: "Bread", keywords: ["bread", "toast"], perSlice: 80, unitCalories: 80, defaultCalories: 80 },
+      { name: "Bagel", keywords: ["bagel", "bagels"], unitCalories: 280, defaultCalories: 280 },
+      { name: "Tortilla", keywords: ["tortilla", "wrap"], unitCalories: 140, defaultCalories: 140 },
+      { name: "Pancake", keywords: ["pancake", "pancakes"], unitCalories: 90, perPiece: 90, defaultCalories: 180 },
+      { name: "Waffle", keywords: ["waffle", "waffles"], unitCalories: 110, perPiece: 110, defaultCalories: 220 },
+      { name: "Croissant", keywords: ["croissant", "croissants"], unitCalories: 230, defaultCalories: 230 },
+      { name: "Greek yogurt", keywords: ["greek yogurt"], perCup: 130, defaultCalories: 130 },
+      { name: "Yogurt", keywords: ["yogurt"], perCup: 150, defaultCalories: 150 },
+      { name: "Cottage cheese", keywords: ["cottage cheese"], perCup: 180, defaultCalories: 180 },
+      { name: "Milk", keywords: ["milk"], perCup: 120, perTbsp: 8, defaultQty: 1, defaultUnit: "cup", withQty: 0.25, withUnit: "cup", defaultCalories: 120 },
+      { name: "Soy milk", keywords: ["soy milk", "almond milk", "oat milk"], perCup: 90, defaultCalories: 90 },
+      { name: "Cheese", keywords: ["cheese", "cheddar", "mozzarella"], perSlice: 110, per100g: 400, defaultQty: 1, defaultUnit: "slice", withQty: 1, withUnit: "slice", defaultCalories: 110 },
+      { name: "Cream cheese", keywords: ["cream cheese"], perTbsp: 50, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 50 },
+      { name: "Butter", keywords: ["butter"], perTbsp: 100, perTsp: 34, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tsp", defaultCalories: 100 },
+      { name: "Olive oil", keywords: ["olive oil", "oil"], perTbsp: 120, perTsp: 40, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 120 },
+      { name: "Mayonnaise", keywords: ["mayo", "mayonnaise"], perTbsp: 90, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 90 },
+      { name: "Dressing", keywords: ["dressing", "ranch"], perTbsp: 70, defaultQty: 2, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 140 },
+      { name: "Ketchup", keywords: ["ketchup"], perTbsp: 15, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 15 },
+      { name: "Mustard", keywords: ["mustard"], perTbsp: 5, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 5 },
+      { name: "Soy sauce", keywords: ["soy sauce"], perTbsp: 10, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 10 },
+      { name: "Salsa", keywords: ["salsa"], perTbsp: 10, defaultQty: 2, defaultUnit: "tbsp", withQty: 2, withUnit: "tbsp", defaultCalories: 20 },
+      { name: "Sauce", keywords: ["sauce", "gravy"], perTbsp: 50, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 50 },
+      { name: "Hummus", keywords: ["hummus"], perTbsp: 25, defaultQty: 2, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 50 },
+      { name: "Peanut butter", keywords: ["peanut butter"], perTbsp: 95, perTsp: 32, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 95 },
+      { name: "Jam", keywords: ["jam", "jelly", "preserves"], perTbsp: 50, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 50 },
+      { name: "Honey", keywords: ["honey"], perTbsp: 64, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tbsp", defaultCalories: 64 },
+      { name: "Sugar", keywords: ["sugar"], perTsp: 16, perTbsp: 48, defaultQty: 1, defaultUnit: "tsp", withQty: 1, withUnit: "tsp", defaultCalories: 16 },
+      { name: "Protein powder", keywords: ["protein powder", "whey", "whey protein"], perScoop: 120, defaultQty: 1, defaultUnit: "scoop", defaultCalories: 120 },
+      { name: "Protein shake", keywords: ["protein shake", "shake", "protein drink"], unitCalories: 180, defaultCalories: 180 },
+      { name: "Milkshake", keywords: ["milkshake", "milk shake"], unitCalories: 350, defaultCalories: 350 },
+      { name: "Smoothie", keywords: ["smoothie", "smoothies"], unitCalories: 250, defaultCalories: 250 },
+      { name: "Coffee", keywords: ["coffee", "black coffee"], perCup: 2, defaultCalories: 2 },
+      { name: "Latte", keywords: ["latte"], perCup: 120, defaultCalories: 120 },
+      { name: "Cappuccino", keywords: ["cappuccino"], perCup: 80, defaultCalories: 80 },
+      { name: "Tea", keywords: ["tea", "black tea", "green tea"], defaultCalories: 0 },
+      { name: "Beer", keywords: ["beer"], perCan: 150, perBottle: 150, defaultCalories: 150 },
+      { name: "Wine", keywords: ["wine"], perGlass: 125, defaultCalories: 125 },
+      { name: "Soda", keywords: ["soda", "cola", "coke"], perCan: 150, defaultCalories: 150 },
+      { name: "Juice", keywords: ["juice", "orange juice", "apple juice"], perCup: 110, defaultCalories: 110 },
+      { name: "Banana", keywords: ["banana", "bananas"], unitCalories: 105, defaultCalories: 105, unitLabel: "medium" },
+      { name: "Apple", keywords: ["apple", "apples"], unitCalories: 95, defaultCalories: 95, unitLabel: "medium" },
+      { name: "Orange", keywords: ["orange", "oranges"], unitCalories: 62, defaultCalories: 62, unitLabel: "medium" },
+      { name: "Berries", keywords: ["berries", "strawberry", "strawberries", "blueberry", "blueberries"], perCup: 85, defaultCalories: 85 },
+      { name: "Grapes", keywords: ["grapes"], perCup: 100, defaultCalories: 100 },
+      { name: "Mango", keywords: ["mango"], perCup: 100, unitCalories: 135, defaultCalories: 135 },
+      { name: "Avocado", keywords: ["avocado"], unitCalories: 240, per100g: 160, defaultCalories: 240, unitLabel: "medium" },
+      { name: "Sweet potato", keywords: ["sweet potato", "sweet potatoes"], unitCalories: 112, per100g: 86, defaultCalories: 112, unitLabel: "medium" },
+      { name: "Potato", keywords: ["potato", "potatoes"], unitCalories: 160, per100g: 87, defaultCalories: 160, unitLabel: "medium" },
+      { name: "Broccoli", keywords: ["broccoli"], per100g: 34, perCup: 30, defaultCalories: 30, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Carrot", keywords: ["carrot", "carrots"], unitCalories: 25, per100g: 41, defaultCalories: 25, unitLabel: "medium" },
+      { name: "Corn", keywords: ["corn"], perCup: 130, defaultCalories: 130 },
+      { name: "Peas", keywords: ["peas"], perCup: 120, defaultCalories: 120 },
+      { name: "Vegetables", keywords: ["vegetables", "veggies", "vegetable", "mixed vegetables"], per100g: 35, perCup: 50, defaultCalories: 50, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Salad", keywords: ["salad", "greens"], per100g: 20, defaultCalories: 100, type: "weight" },
+      { name: "Fruit", keywords: ["fruit"], unitCalories: 80, defaultCalories: 80 },
+      { name: "Beans", keywords: ["beans", "black beans", "kidney beans"], per100g: 120, perCup: 240, defaultCalories: 170, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Lentils", keywords: ["lentils"], per100g: 116, perCup: 230, defaultCalories: 170, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Chickpeas", keywords: ["chickpeas", "chickpea"], per100g: 160, perCup: 270, defaultCalories: 180, type: "weight", withQty: 0.5, withUnit: "cup" },
+      { name: "Almonds", keywords: ["almonds"], per100g: 579, defaultCalories: 170, type: "weight" },
+      { name: "Peanuts", keywords: ["peanuts"], per100g: 567, defaultCalories: 170, type: "weight" },
+      { name: "Walnuts", keywords: ["walnuts"], per100g: 654, defaultCalories: 190, type: "weight" },
+      { name: "Nuts", keywords: ["nuts", "mixed nuts"], per100g: 600, defaultCalories: 170, type: "weight" },
+      { name: "Protein bar", keywords: ["protein bar", "protein bars"], unitCalories: 200, perPiece: 200, defaultCalories: 200 },
+      { name: "Granola bar", keywords: ["granola bar", "granola bars"], unitCalories: 120, perPiece: 120, defaultCalories: 120 },
+      { name: "Chips", keywords: ["chips"], per100g: 540, defaultCalories: 160, type: "weight" },
+      { name: "Popcorn", keywords: ["popcorn"], perCup: 30, defaultCalories: 100 },
+      { name: "Crackers", keywords: ["crackers", "cracker"], unitCalories: 15, perPiece: 15, defaultCalories: 120 },
+      { name: "Pizza", keywords: ["pizza"], perSlice: 285, perPiece: 285, defaultCalories: 285 },
+      { name: "Burger", keywords: ["burger", "cheeseburger", "hamburger"], unitCalories: 450, defaultCalories: 450 },
+      { name: "Hot dog", keywords: ["hot dog", "hotdog"], unitCalories: 150, defaultCalories: 150 },
+      { name: "Sandwich", keywords: ["sandwich", "sandwiches", "sub"], unitCalories: 350, defaultCalories: 350 },
+      { name: "Burrito", keywords: ["burrito", "burritos"], unitCalories: 600, defaultCalories: 600 },
+      { name: "Taco", keywords: ["taco", "tacos"], unitCalories: 210, perPiece: 210, defaultCalories: 210 },
+      { name: "Fries", keywords: ["fries", "french fries"], per100g: 312, defaultCalories: 320, type: "weight" },
+      { name: "Sushi", keywords: ["sushi"], perPiece: 40, defaultCalories: 240 },
+      { name: "Dumpling", keywords: ["dumpling", "dumplings", "gyoza"], perPiece: 45, defaultCalories: 180 },
+      { name: "Soup", keywords: ["soup"], perCup: 150, defaultCalories: 150 },
+      { name: "Chili", keywords: ["chili"], perCup: 250, defaultCalories: 250 },
+      { name: "Cookie", keywords: ["cookie", "cookies"], unitCalories: 150, perPiece: 150, defaultCalories: 150 },
+      { name: "Cake", keywords: ["cake"], unitCalories: 350, defaultCalories: 350 },
+      { name: "Brownie", keywords: ["brownie", "brownies"], unitCalories: 240, perPiece: 240, defaultCalories: 240 },
+      { name: "Ice cream", keywords: ["ice cream"], perCup: 270, defaultCalories: 140 },
+      { name: "Chocolate", keywords: ["chocolate"], unitCalories: 100, defaultCalories: 100 },
+      { name: "Dessert", keywords: ["dessert"], defaultCalories: 250 },
+      { name: "Garlic", keywords: ["garlic"], perClove: 4, defaultCalories: 4 },
+      { name: "Onion", keywords: ["onion", "onions"], unitCalories: 40, per100g: 40, defaultCalories: 40, unitLabel: "medium" },
+      { name: "Roti / Chapati", keywords: ["roti", "chapati", "phulka", "chappati"], unitCalories: 110, perPiece: 110, defaultCalories: 110 },
+      { name: "Butter roti", keywords: ["butter roti"], unitCalories: 140, perPiece: 140, defaultCalories: 140 },
+      { name: "Naan", keywords: ["naan"], unitCalories: 260, perPiece: 260, defaultCalories: 260 },
+      { name: "Butter naan", keywords: ["butter naan"], unitCalories: 300, perPiece: 300, defaultCalories: 300 },
+      { name: "Garlic naan", keywords: ["garlic naan"], unitCalories: 320, perPiece: 320, defaultCalories: 320 },
+      { name: "Paratha", keywords: ["paratha"], unitCalories: 220, perPiece: 220, defaultCalories: 220 },
+      { name: "Aloo paratha", keywords: ["aloo paratha"], unitCalories: 280, perPiece: 280, defaultCalories: 280 },
+      { name: "Poori", keywords: ["poori", "puri"], unitCalories: 150, perPiece: 150, defaultCalories: 150 },
+      { name: "Bhatura", keywords: ["bhatura", "bhature"], unitCalories: 350, perPiece: 350, defaultCalories: 350 },
+      { name: "Chicken biryani", keywords: ["chicken biryani", "biryani"], per100g: 160, perCup: 350, perPlate: 600, defaultCalories: 600, type: "weight" },
+      { name: "Veg biryani", keywords: ["veg biryani", "vegetable biryani"], perCup: 300, perPlate: 500, defaultCalories: 500 },
+      { name: "Pulao", keywords: ["pulao", "pulav"], perCup: 300, perPlate: 500, defaultCalories: 500 },
+      { name: "Jeera rice", keywords: ["jeera rice"], perCup: 250, defaultCalories: 250 },
+      { name: "Curd rice", keywords: ["curd rice"], perCup: 300, defaultCalories: 300 },
+      { name: "Lemon rice", keywords: ["lemon rice"], perCup: 350, defaultCalories: 350 },
+      { name: "Dal", keywords: ["dal", "daal", "toor dal", "moong dal", "masoor dal", "dal tadka", "dal fry"], perCup: 160, defaultCalories: 160, withQty: 0.75, withUnit: "cup" },
+      { name: "Dal makhani", keywords: ["dal makhani"], perCup: 300, defaultCalories: 300 },
+      { name: "Rajma", keywords: ["rajma"], perCup: 220, defaultCalories: 220, withQty: 0.75, withUnit: "cup" },
+      { name: "Chana masala", keywords: ["chana masala", "chole", "chhole", "chana"], perCup: 250, defaultCalories: 250 },
+      { name: "Sambar", keywords: ["sambar", "sambhar"], perCup: 150, defaultCalories: 150, withQty: 0.5, withUnit: "cup" },
+      { name: "Rasam", keywords: ["rasam"], perCup: 60, defaultCalories: 60 },
+      { name: "Palak paneer", keywords: ["palak paneer"], perCup: 280, defaultCalories: 280 },
+      { name: "Paneer butter masala", keywords: ["paneer butter masala", "paneer makhani"], perCup: 350, defaultCalories: 350 },
+      { name: "Kadai paneer", keywords: ["kadai paneer"], perCup: 350, defaultCalories: 350 },
+      { name: "Mattar paneer", keywords: ["mattar paneer", "matar paneer"], perCup: 300, defaultCalories: 300 },
+      { name: "Paneer", keywords: ["paneer"], per100g: 265, defaultCalories: 130, type: "weight" },
+      { name: "Butter chicken", keywords: ["butter chicken", "chicken makhani"], perCup: 440, defaultCalories: 440 },
+      { name: "Chicken tikka masala", keywords: ["chicken tikka masala"], perCup: 400, defaultCalories: 400 },
+      { name: "Chicken curry", keywords: ["chicken curry"], perCup: 280, defaultCalories: 280 },
+      { name: "Egg curry", keywords: ["egg curry", "anda curry"], perCup: 250, defaultCalories: 250 },
+      { name: "Fish curry", keywords: ["fish curry"], perCup: 250, defaultCalories: 250 },
+      { name: "Korma", keywords: ["korma", "kurma"], perCup: 350, defaultCalories: 350 },
+      { name: "Vindaloo", keywords: ["vindaloo"], perCup: 350, defaultCalories: 350 },
+      { name: "Rogan josh", keywords: ["rogan josh"], perCup: 350, defaultCalories: 350 },
+      { name: "Tandoori chicken", keywords: ["tandoori chicken"], unitCalories: 260, perPiece: 260, defaultCalories: 260 },
+      { name: "Chicken tikka", keywords: ["chicken tikka"], unitCalories: 150, perPiece: 150, defaultCalories: 300 },
+      { name: "Aloo gobi", keywords: ["aloo gobi"], perCup: 180, defaultCalories: 180 },
+      { name: "Jeera aloo", keywords: ["jeera aloo", "aloo jeera"], perCup: 200, defaultCalories: 200 },
+      { name: "Bhindi masala", keywords: ["bhindi", "okra masala"], perCup: 150, defaultCalories: 150 },
+      { name: "Baingan bharta", keywords: ["baingan bharta", "baingan"], perCup: 180, defaultCalories: 180 },
+      { name: "Mixed vegetable curry", keywords: ["mixed vegetable", "veg curry", "vegetable curry"], perCup: 150, defaultCalories: 150 },
+      { name: "Samosa", keywords: ["samosa", "samosas"], unitCalories: 260, perPiece: 260, defaultCalories: 260 },
+      { name: "Pakora", keywords: ["pakora", "pakoras", "pakoda"], unitCalories: 90, perPiece: 90, defaultCalories: 270 },
+      { name: "Vada pav", keywords: ["vada pav", "vadapav"], unitCalories: 300, defaultCalories: 300 },
+      { name: "Pav bhaji", keywords: ["pav bhaji"], perPlate: 450, defaultCalories: 450 },
+      { name: "Masala dosa", keywords: ["masala dosa"], unitCalories: 380, defaultCalories: 380 },
+      { name: "Dosa", keywords: ["dosa", "dosai"], unitCalories: 200, defaultCalories: 200 },
+      { name: "Idli", keywords: ["idli", "idly"], unitCalories: 65, perPiece: 65, defaultCalories: 130 },
+      { name: "Medu vada", keywords: ["medu vada", "vada", "wada"], unitCalories: 130, perPiece: 130, defaultCalories: 260 },
+      { name: "Upma", keywords: ["upma", "uppuma"], perCup: 210, defaultCalories: 210 },
+      { name: "Poha", keywords: ["poha"], perCup: 250, defaultCalories: 250 },
+      { name: "Pani puri", keywords: ["pani puri", "golgappa", "golgappe", "panipuri"], unitCalories: 40, perPiece: 40, defaultCalories: 240 },
+      { name: "Bhel puri", keywords: ["bhel puri", "bhelpuri"], perPlate: 280, defaultCalories: 280 },
+      { name: "Sev puri", keywords: ["sev puri"], perPlate: 300, defaultCalories: 300 },
+      { name: "Chaat", keywords: ["chaat"], perPlate: 300, defaultCalories: 300 },
+      { name: "Dhokla", keywords: ["dhokla"], unitCalories: 75, perPiece: 75, defaultCalories: 150 },
+      { name: "Kachori", keywords: ["kachori"], unitCalories: 280, perPiece: 280, defaultCalories: 280 },
+      { name: "Veg thali", keywords: ["thali", "veg thali"], perPlate: 900, defaultCalories: 900 },
+      { name: "Gulab jamun", keywords: ["gulab jamun"], unitCalories: 150, perPiece: 150, defaultCalories: 150 },
+      { name: "Rasgulla", keywords: ["rasgulla"], unitCalories: 110, perPiece: 110, defaultCalories: 110 },
+      { name: "Kheer", keywords: ["kheer"], perCup: 300, defaultCalories: 300 },
+      { name: "Gajar halwa", keywords: ["gajar halwa", "gajar ka halwa", "halwa"], per100g: 280, defaultCalories: 250, type: "weight" },
+      { name: "Jalebi", keywords: ["jalebi"], unitCalories: 150, perPiece: 150, defaultCalories: 150 },
+      { name: "Barfi", keywords: ["barfi", "barfee"], unitCalories: 110, perPiece: 110, defaultCalories: 110 },
+      { name: "Laddoo", keywords: ["laddoo", "laddu"], unitCalories: 200, perPiece: 200, defaultCalories: 200 },
+      { name: "Kulfi", keywords: ["kulfi"], unitCalories: 260, perPiece: 260, defaultCalories: 260 },
+      { name: "Masala chai", keywords: ["masala chai"], perCup: 70, defaultCalories: 70 },
+      { name: "Chai", keywords: ["chai", "chai tea"], perCup: 60, defaultCalories: 60 },
+      { name: "Filter coffee", keywords: ["filter coffee"], perCup: 90, defaultCalories: 90 },
+      { name: "Lassi", keywords: ["lassi", "sweet lassi"], perCup: 220, defaultCalories: 220 },
+      { name: "Chaas", keywords: ["chaas", "buttermilk", "majjige"], perCup: 50, defaultCalories: 50 },
+      { name: "Curd / Dahi", keywords: ["curd", "dahi"], perCup: 120, defaultCalories: 120 },
+      { name: "Raita", keywords: ["raita"], perCup: 90, defaultCalories: 90, withQty: 0.5, withUnit: "cup" },
+      { name: "Ghee", keywords: ["ghee"], perTbsp: 120, perTsp: 40, defaultQty: 1, defaultUnit: "tbsp", withQty: 1, withUnit: "tsp", defaultCalories: 120 },
+      { name: "Coconut chutney", keywords: ["coconut chutney"], perTbsp: 45, defaultQty: 2, defaultUnit: "tbsp", withQty: 2, withUnit: "tbsp", defaultCalories: 90 },
+      { name: "Green chutney", keywords: ["mint chutney", "coriander chutney", "green chutney"], perTbsp: 15, defaultQty: 2, defaultUnit: "tbsp", withQty: 2, withUnit: "tbsp", defaultCalories: 30 },
+      { name: "Tamarind chutney", keywords: ["tamarind chutney", "saunth", "imli chutney"], perTbsp: 40, defaultQty: 2, defaultUnit: "tbsp", withQty: 2, withUnit: "tbsp", defaultCalories: 80 },
+      { name: "Pickle / Achar", keywords: ["pickle", "achar", "achaar"], perTbsp: 30, defaultQty: 1, defaultUnit: "tbsp", defaultCalories: 30 },
+      { name: "Papad", keywords: ["papad", "pappad", "appalam"], unitCalories: 50, perPiece: 50, defaultCalories: 50 },
+      { name: "Maggi", keywords: ["maggi", "instant noodles"], perBowl: 380, defaultCalories: 380 }
+    ];
+
+    const FOODS = FOOD_DB.map(food => ({
+      ...food,
+      keywords: food.keywords.map(keyword => keyword.toLowerCase())
+    }));
+
+    const MACRO_DB = {
+      "Egg white": { p: 3.6, f: 0.1 },
+      "Egg": { p: 6.3, f: 4.8 },
+      "Omelette": { p: 11, f: 11 },
+      "Bacon": { p: 6, f: 7 },
+      "Chicken breast": { p100: 31, f100: 3.6 },
+      "Chicken thigh": { p100: 26, f100: 11 },
+      "Turkey": { p100: 30, f100: 1 },
+      "Beef": { p100: 26, f100: 15 },
+      "Pork": { p100: 27, f100: 14 },
+      "Salmon": { p100: 20, f100: 13 },
+      "White fish": { p100: 26, f100: 1 },
+      "Shrimp": { p100: 24, f100: 0.3 },
+      "Tofu": { p100: 8, f100: 5 },
+      "Sausage": { p: 11, f: 13 },
+      "Meatballs": { p: 12, f: 14 },
+      "Chicken nuggets": { p: 13, f: 17 },
+      "Brown rice": { p: 5, f: 1.5 },
+      "White rice": { p: 4, f: 0.5 },
+      "Quinoa": { p: 8, f: 3.5 },
+      "Pasta": { p: 7, f: 1 },
+      "Oatmeal": { p: 5, f: 3 },
+      "Oats": { p: 5, f: 3 },
+      "Cereal": { p: 3, f: 1 },
+      "Granola": { p: 5, f: 9 },
+      "Bread": { p: 3, f: 1 },
+      "Bagel": { p: 10, f: 1.5 },
+      "Tortilla": { p: 4, f: 3 },
+      "Pancake": { p: 5, f: 5 },
+      "Waffle": { p: 6, f: 10 },
+      "Croissant": { p: 5, f: 12 },
+      "Greek yogurt": { p: 15, f: 3 },
+      "Yogurt": { p: 8, f: 8 },
+      "Cottage cheese": { p: 25, f: 5 },
+      "Milk": { p: 8, f: 4.8 },
+      "Soy milk": { p: 7, f: 4 },
+      "Cheese": { p: 7, f: 9 },
+      "Cream cheese": { p: 1, f: 5 },
+      "Butter": { p: 0.1, f: 11.5 },
+      "Olive oil": { p: 0, f: 14 },
+      "Mayonnaise": { p: 0, f: 10 },
+      "Dressing": { p: 0.5, f: 7 },
+      "Peanut butter": { p: 4, f: 8 },
+      "Protein powder": { p: 24, f: 1.5 },
+      "Protein shake": { p: 30, f: 3 },
+      "Smoothie": { p: 5, f: 3 },
+      "Latte": { p: 8, f: 4 },
+      "Banana": { p: 1.3, f: 0.4 },
+      "Apple": { p: 0.5, f: 0.3 },
+      "Orange": { p: 1.2, f: 0.2 },
+      "Berries": { p: 1, f: 0.5 },
+      "Grapes": { p: 1, f: 0.3 },
+      "Mango": { p: 1, f: 0.5 },
+      "Avocado": { p: 3, f: 22 },
+      "Sweet potato": { p: 2, f: 0 },
+      "Potato": { p: 4, f: 0 },
+      "Broccoli": { p: 2.5, f: 0.3 },
+      "Carrot": { p: 0.5, f: 0 },
+      "Corn": { p: 5, f: 2 },
+      "Peas": { p: 8, f: 0.5 },
+      "Vegetables": { p: 2, f: 2 },
+      "Salad": { p: 2, f: 6 },
+      "Fruit": { p: 1, f: 0.3 },
+      "Beans": { p: 9, f: 1 },
+      "Lentils": { p: 12, f: 0.5 },
+      "Chickpeas": { p: 10, f: 3 },
+      "Almonds": { p: 6, f: 15 },
+      "Peanuts": { p: 7, f: 14 },
+      "Walnuts": { p: 4, f: 18 },
+      "Nuts": { p: 5, f: 15 },
+      "Protein bar": { p: 20, f: 7 },
+      "Granola bar": { p: 3, f: 5 },
+      "Chips": { p: 2, f: 10 },
+      "Popcorn": { p: 3, f: 3 },
+      "Crackers": { p: 2, f: 5 },
+      "Pizza": { p: 12, f: 10 },
+      "Burger": { p: 25, f: 25 },
+      "Hot dog": { p: 6, f: 13 },
+      "Sandwich": { p: 18, f: 12 },
+      "Burrito": { p: 25, f: 20 },
+      "Taco": { p: 10, f: 11 },
+      "Fries": { p: 4, f: 15 },
+      "Sushi": { p: 10, f: 3 },
+      "Dumpling": { p: 8, f: 7 },
+      "Soup": { p: 6, f: 5 },
+      "Chili": { p: 15, f: 10 },
+      "Cookie": { p: 2, f: 7 },
+      "Cake": { p: 4, f: 15 },
+      "Brownie": { p: 3, f: 11 },
+      "Ice cream": { p: 2.5, f: 7 },
+      "Chocolate": { p: 1, f: 6 },
+      "Dessert": { p: 3, f: 10 },
+      "Onion": { p: 1, f: 0 },
+      "Roti / Chapati": { p: 3.5, f: 1 },
+      "Butter roti": { p: 3.5, f: 4 },
+      "Naan": { p: 8, f: 5 },
+      "Butter naan": { p: 8, f: 9 },
+      "Garlic naan": { p: 8, f: 10 },
+      "Paratha": { p: 6, f: 10 },
+      "Aloo paratha": { p: 7, f: 14 },
+      "Poori": { p: 3, f: 8 },
+      "Bhatura": { p: 8, f: 18 },
+      "Chicken biryani": { p100: 8, f100: 5 },
+      "Veg biryani": { p100: 3, f100: 4 },
+      "Pulao": { p: 10, f: 14 },
+      "Jeera rice": { p: 4, f: 6 },
+      "Curd rice": { p: 6, f: 8 },
+      "Lemon rice": { p: 5, f: 10 },
+      "Dal": { p: 9, f: 4 },
+      "Dal makhani": { p: 12, f: 15 },
+      "Rajma": { p: 13, f: 6 },
+      "Chana masala": { p: 12, f: 8 },
+      "Sambar": { p: 6, f: 3 },
+      "Rasam": { p: 2, f: 1 },
+      "Palak paneer": { p: 14, f: 20 },
+      "Paneer butter masala": { p: 16, f: 27 },
+      "Kadai paneer": { p: 16, f: 26 },
+      "Mattar paneer": { p: 14, f: 20 },
+      "Paneer": { p100: 18, f100: 20 },
+      "Butter chicken": { p: 30, f: 30 },
+      "Chicken tikka masala": { p: 30, f: 26 },
+      "Chicken curry": { p: 25, f: 17 },
+      "Egg curry": { p: 13, f: 18 },
+      "Fish curry": { p: 22, f: 14 },
+      "Korma": { p: 15, f: 25 },
+      "Vindaloo": { p: 22, f: 20 },
+      "Rogan josh": { p: 25, f: 24 },
+      "Tandoori chicken": { p: 25, f: 12 },
+      "Chicken tikka": { p: 30, f: 15 },
+      "Aloo gobi": { p: 4, f: 9 },
+      "Jeera aloo": { p: 4, f: 10 },
+      "Bhindi masala": { p: 3, f: 10 },
+      "Baingan bharta": { p: 4, f: 12 },
+      "Mixed vegetable curry": { p: 4, f: 8 },
+      "Samosa": { p: 4, f: 14 },
+      "Pakora": { p: 6, f: 15 },
+      "Vada pav": { p: 7, f: 13 },
+      "Pav bhaji": { p: 10, f: 20 },
+      "Masala dosa": { p: 9, f: 8 },
+      "Dosa": { p: 5, f: 2 },
+      "Idli": { p: 5, f: 0.5 },
+      "Medu vada": { p: 6, f: 14 },
+      "Upma": { p: 4, f: 5 },
+      "Poha": { p: 4, f: 8 },
+      "Pani puri": { p: 4, f: 10 },
+      "Bhel puri": { p: 6, f: 8 },
+      "Sev puri": { p: 6, f: 12 },
+      "Chaat": { p: 6, f: 12 },
+      "Dhokla": { p: 6, f: 4 },
+      "Kachori": { p: 5, f: 16 },
+      "Veg thali": { p: 25, f: 30 },
+      "Gulab jamun": { p: 2, f: 6 },
+      "Rasgulla": { p: 2, f: 1 },
+      "Kheer": { p: 8, f: 10 },
+      "Gajar halwa": { p100: 3, f100: 15 },
+      "Jalebi": { p: 1, f: 7 },
+      "Barfi": { p: 3, f: 5 },
+      "Laddoo": { p: 4, f: 9 },
+      "Kulfi": { p: 6, f: 12 },
+      "Masala chai": { p: 2, f: 2 },
+      "Chai": { p: 2, f: 2 },
+      "Filter coffee": { p: 3, f: 3 },
+      "Lassi": { p: 8, f: 5 },
+      "Chaas": { p: 3, f: 2 },
+      "Curd / Dahi": { p: 8, f: 5 },
+      "Raita": { p: 4, f: 4 },
+      "Ghee": { p: 0, f: 14 },
+      "Coconut chutney": { p: 1, f: 7 },
+      "Green chutney": { p: 1, f: 1 },
+      "Tamarind chutney": { p: 0.5, f: 0 },
+      "Pickle / Achar": { p: 0.5, f: 3 },
+      "Papad": { p: 3, f: 2 },
+      "Maggi": { p: 8, f: 14 }
+    };
+
+    function estimateMacros(food, calories) {
+      const m = food ? MACRO_DB[food.name] : null;
+
+      if (!m || !Number.isFinite(calories) || calories <= 0) {
+        return { protein: null, fat: null };
+      }
+
+      let refCal = null;
+      let refP = null;
+      let refF = null;
+
+      if (m.p100 != null && food.per100g) {
+        refCal = food.per100g;
+        refP = m.p100;
+        refF = m.f100;
+      } else if (m.p != null) {
+        refCal = food.defaultCalories != null ? food.defaultCalories : food.unitCalories;
+        refP = m.p;
+        refF = m.f;
+      }
+
+      if (!refCal || refCal <= 0) {
+        return { protein: null, fat: null };
+      }
+
+      const factor = calories / refCal;
+
+      return {
+        protein: refP != null ? Math.round(refP * factor * 10) / 10 : null,
+        fat: refF != null ? Math.round(refF * factor * 10) / 10 : null
+      };
+    }
+
+    // ===== PART 1 ENDS =====
+    // ----- Element references -----
+    const dateEl = document.getElementById("date");
+    const goalEl = document.getElementById("goal");
+    const foodStatEl = document.getElementById("foodStat");
+    const burnStatEl = document.getElementById("burnStat");
+    const goalStatEl = document.getElementById("goalStat");
+    const remainingEl = document.getElementById("remaining");
+    const barEl = document.getElementById("bar");
+    const macroSummaryEl = document.getElementById("macroSummary");
+    const entriesEl = document.getElementById("entries");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const mealTextEl = document.getElementById("mealText");
+    const estimateBtn = document.getElementById("estimateBtn");
+    const estimatePreviewEl = document.getElementById("estimatePreview");
+    const addOneBtn = document.getElementById("addOneBtn");
+    const addSeparateBtn = document.getElementById("addSeparateBtn");
+
+    const manualForm = document.getElementById("manualForm");
+    const manualFoodEl = document.getElementById("manualFood");
+    const manualCaloriesEl = document.getElementById("manualCalories");
+    const manualProteinEl = document.getElementById("manualProtein");
+    const manualFatEl = document.getElementById("manualFat");
+    const manualNotesEl = document.getElementById("manualNotes");
+
+    const openrouterKeyEl = document.getElementById("openrouterKey");
+    const openrouterModelEl = document.getElementById("openrouterModel");
+    const saveAiSettingsBtn = document.getElementById("saveAiSettingsBtn");
+    const aiSettingsCardEl = document.getElementById("aiSettingsCard");
+    const aiSavedBarEl = document.getElementById("aiSavedBar");
+    const editAiSettingsBtn = document.getElementById("editAiSettingsBtn");
+
+    const exerciseForm = document.getElementById("exerciseForm");
+    const exerciseNameEl = document.getElementById("exerciseName");
+    const exerciseCaloriesEl = document.getElementById("exerciseCalories");
+    const exerciseMinutesEl = document.getElementById("exerciseMinutes");
+
+    const waterUnitEl = document.getElementById("waterUnit");
+    const waterCupBtn = document.getElementById("waterCupBtn");
+    const waterBottleBtn = document.getElementById("waterBottleBtn");
+    const waterCustomEl = document.getElementById("waterCustom");
+    const waterGoalEl = document.getElementById("waterGoal");
+    const waterAddBtn = document.getElementById("waterAddBtn");
+    const waterBarEl = document.getElementById("waterBar");
+    const waterSummaryEl = document.getElementById("waterSummary");
+    const waterListEl = document.getElementById("waterList");
+
+    const weightDateEl = document.getElementById("weightDate");
+    const weightValueEl = document.getElementById("weightValue");
+    const weightUnitEl = document.getElementById("weightUnit");
+    const addWeightBtn = document.getElementById("addWeightBtn");
+    const weightSummaryEl = document.getElementById("weightSummary");
+    const weightChartEl = document.getElementById("weightChart");
+    const weightChartNoteEl = document.getElementById("weightChartNote");
+    const weightListEl = document.getElementById("weightList");
+    const exportWeightsBtn = document.getElementById("exportWeightsBtn");
+
+    // ----- State -----
+    let entries = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      entries = Array.isArray(parsed) ? parsed : [];
+    } catch { entries = []; }
+
+    let goal = Number(localStorage.getItem(GOAL_KEY) || 2000);
+    if (!Number.isFinite(goal)) goal = 2000;
+
+    let weights = [];
+    try {
+      const parsedWeights = JSON.parse(localStorage.getItem(WEIGHTS_KEY) || "[]");
+      weights = Array.isArray(parsedWeights) ? parsedWeights : [];
+    } catch { weights = []; }
+
+    let weightUnit = localStorage.getItem(WEIGHT_UNIT_KEY) || "kg";
+    if (weightUnit !== "kg" && weightUnit !== "lb") weightUnit = "kg";
+
+    let waterEntries = [];
+    try {
+      const parsedWater = JSON.parse(localStorage.getItem(WATER_KEY) || "[]");
+      waterEntries = Array.isArray(parsedWater) ? parsedWater : [];
+    } catch { waterEntries = []; }
+
+    let waterGoalMl = Number(localStorage.getItem(WATER_GOAL_KEY) || 2000);
+    if (!Number.isFinite(waterGoalMl) || waterGoalMl <= 0) waterGoalMl = 2000;
+
+    let waterUnit = localStorage.getItem(WATER_UNIT_KEY) || "ml";
+    if (waterUnit !== "ml" && waterUnit !== "oz") waterUnit = "ml";
+
+    let lastEstimate = { items: [], total: 0 };
+
+    // ----- Utilities -----
+    function localToday() {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 10);
+    }
+
+    function nowTime() {
+      const d = new Date();
+      return d.toTimeString().slice(0, 5);
+    }
+
+    function uid() {
+      return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+    }
+
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+        localStorage.setItem(GOAL_KEY, String(goal));
+      } catch {}
+    }
+
+    function saveWeights() {
+      try {
+        localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights));
+        localStorage.setItem(WEIGHT_UNIT_KEY, weightUnit);
+      } catch {}
+    }
+
+    function saveWater() {
+      try {
+        localStorage.setItem(WATER_KEY, JSON.stringify(waterEntries));
+        localStorage.setItem(WATER_GOAL_KEY, String(waterGoalMl));
+        localStorage.setItem(WATER_UNIT_KEY, waterUnit);
+      } catch {}
+    }
+
+    function isExercise(entry) {
+      return !!entry && entry.type === "exercise";
+    }
+
+    function dayEntries() {
+      return entries
+        .filter(entry => entry.date === dateEl.value)
+        .sort((a, b) => {
+          return (
+            (a.time || "").localeCompare(b.time || "") ||
+            (a.createdAt || 0) - (b.createdAt || 0)
+          );
+        });
+    }
+
+    // ----- Main render -----
+    function render() {
+      const list = dayEntries();
+
+      const foodTotal = list.reduce((s, e) => s + (isExercise(e) ? 0 : Number(e.calories || 0)), 0);
+      const burnTotal = list.reduce((s, e) => s + (isExercise(e) ? Number(e.calories || 0) : 0), 0);
+      const net = foodTotal - burnTotal;
+      const remaining = goal - net;
+
+      foodStatEl.textContent = foodTotal.toLocaleString();
+      burnStatEl.textContent = burnTotal.toLocaleString();
+      goalStatEl.textContent = goal.toLocaleString();
+      remainingEl.textContent = remaining.toLocaleString();
+
+      const percent = goal > 0 ? Math.min(100, (Math.max(0, net) / goal) * 100) : 0;
+      barEl.style.width = percent + "%";
+      barEl.classList.toggle("over", net > goal);
+
+      const proteinTotal = list.reduce((s, e) => s + (isExercise(e) ? 0 : Number(e.protein || 0)), 0);
+      const fatTotal = list.reduce((s, e) => s + (isExercise(e) ? 0 : Number(e.fat || 0)), 0);
+
+      if (macroSummaryEl) {
+        macroSummaryEl.textContent = (proteinTotal || fatTotal)
+          ? `Today: ${Math.round(proteinTotal)} g protein • ${Math.round(fatTotal)} g fat`
+          : "";
+      }
+
+      entriesEl.innerHTML = "";
+
+      if (!list.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No entries yet. Describe a meal above.";
+        entriesEl.appendChild(empty);
+        return;
+      }
+
+      for (const entry of list) {
+        const card = document.createElement("div");
+        card.className = "entry";
+
+        const top = document.createElement("div");
+        top.className = "entry-top";
+
+        const left = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = isExercise(entry) ? `🏃 ${entry.food}` : entry.food;
+        left.appendChild(title);
+
+        const right = document.createElement("div");
+        const calories = document.createElement("strong");
+        calories.textContent = isExercise(entry)
+          ? `−${Number(entry.calories || 0).toLocaleString()} cal`
+          : `${Number(entry.calories || 0).toLocaleString()} cal`;
+        right.appendChild(calories);
+
+        top.appendChild(left);
+        top.appendChild(right);
+
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        const proteinText = entry.protein ? ` • ${entry.protein}g protein` : "";
+        const fatText = entry.fat ? ` • ${entry.fat}g fat` : "";
+        const minutesText = entry.minutes ? ` • ${entry.minutes} min` : "";
+        meta.textContent = `${entry.time || ""}${proteinText}${fatText}${minutesText}`;
+
+        const actions = document.createElement("div");
+        actions.style.marginTop = "10px";
+
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "danger";
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+        deleteButton.onclick = () => {
+          entries = entries.filter(item => item.id !== entry.id);
+          save();
+          render();
+        };
+        actions.appendChild(deleteButton);
+
+        card.appendChild(top);
+        card.appendChild(meta);
+
+        if (entry.notes) {
+          const notes = document.createElement("div");
+          notes.className = "muted";
+          notes.textContent = entry.notes;
+          card.appendChild(notes);
+        }
+
+        card.appendChild(actions);
+        entriesEl.appendChild(card);
+      }
+    }
+
+    // ---------- Local meal estimator ----------
+    function parseQuantityAndUnit(raw) {
+      let text = ` ${raw.toLowerCase()} `;
+
+      text = text
+        .replace(/½/g, " 1/2 ").replace(/¼/g, " 1/4 ").replace(/¾/g, " 3/4 ")
+        .replace(/⅓/g, " 1/3 ").replace(/⅔/g, " 2/3 ");
+
+      text = text
+        .replace(/\ba half\b/g, " 1/2 ").replace(/\bhalf\b/g, " 1/2 ")
+        .replace(/\ba couple\b/g, " 2 ").replace(/\ba few\b/g, " 3 ")
+        .replace(/\ba handful\b/g, " 1 handful ")
+        .replace(/\ba splash\b/g, " 1 tablespoon ")
+        .replace(/\ba drizzle\b/g, " 1 teaspoon ")
+        .replace(/\ba little bit of\b/g, " ").replace(/\ba little bit\b/g, " ")
+        .replace(/\ba little\b/g, " ").replace(/\bsome\b/g, " ");
+
+      text = text.replace(/\b(a|an)\b(?=\s*\/?\d)/g, " ");
+
+      const numberWords = [
+        ["zero", "0"], ["a", "1"], ["an", "1"], ["one", "1"], ["two", "2"],
+        ["three", "3"], ["four", "4"], ["five", "5"], ["six", "6"],
+        ["seven", "7"], ["eight", "8"], ["nine", "9"], ["ten", "10"], ["dozen", "12"]
+      ];
+
+      for (const [word, value] of numberWords) {
+        text = text.replace(new RegExp(`\\b${word}\\b`, "g"), ` ${value} `);
+      }
+
+      text = text.replace(
+        /(\d+)\s+(\d+)\s*\/\s*(\d+)/g,
+        (m, whole, num, den) => ` ${Number(whole) + Number(num) / Number(den)} `
+      );
+
+      text = text.replace(
+        /(\d+)\s*\/\s*(\d+)/g,
+        (m, num, den) => ` ${Number(num) / Number(den)} `
+      );
+
+      const qtyMatch = text.match(/(\d+(?:\.\d+)?)/);
+      const qty = qtyMatch ? Number(qtyMatch[1]) : null;
+
+      const unitTests = [
+        { re: /\b(g|gram|grams|gr)\b/, unit: "g" },
+        { re: /\b(kg|kilogram|kilograms)\b/, unit: "kg" },
+        { re: /\b(oz|ounce|ounces)\b/, unit: "oz" },
+        { re: /\b(ml|milliliter|milliliters)\b/, unit: "ml" },
+        { re: /\b(l|liter|liters)\b/, unit: "l" },
+        { re: /\b(cup|cups)\b/, unit: "cup" },
+        { re: /\b(tbsp|tbs|tablespoon|tablespoons)\b/, unit: "tbsp" },
+        { re: /\b(tsp|teaspoon|teaspoons)\b/, unit: "tsp" },
+        { re: /\b(slice|slices)\b/, unit: "slice" },
+        { re: /\b(clove|cloves)\b/, unit: "clove" },
+        { re: /\b(can|cans)\b/, unit: "can" },
+        { re: /\b(bottle|bottles)\b/, unit: "bottle" },
+        { re: /\b(glass|glasses)\b/, unit: "glass" },
+        { re: /\b(piece|pieces)\b/, unit: "piece" },
+        { re: /\b(scoop|scoops)\b/, unit: "scoop" },
+        { re: /\b(bar|bars)\b/, unit: "bar" },
+        { re: /\b(serving|servings)\b/, unit: "serving" },
+        { re: /\b(plate|plates)\b/, unit: "plate" },
+        { re: /\b(bowl|bowls|katori|katoris)\b/, unit: "bowl" },
+        { re: /\b(handful|handfuls)\b/, unit: "handful" },
+        { re: /\b(small)\b/, unit: "small" },
+        { re: /\b(medium)\b/, unit: "medium" },
+        { re: /\b(large)\b/, unit: "large" }
+      ];
+
+      let unit = null;
+      for (const test of unitTests) {
+        if (test.re.test(text)) { unit = test.unit; break; }
+      }
+
+      if (qty === null && unit) return { qty: 1, unit };
+      return { qty, unit };
+    }
+
+    function buildQuantityPrefix(qty, unit) {
+      if (qty == null) return "";
+      let prefix = String(qty);
+      if (unit) prefix += ` ${unit}`;
+      return prefix;
+    }
+
+    function cleanForMatching(text) {
+      return ` ${text.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim()} `;
+    }
+
+    function findFoodMatchesInText(text) {
+      const clean = cleanForMatching(text);
+      const matches = [];
+
+      for (const food of FOODS) {
+        for (const keyword of food.keywords) {
+          const variations = [keyword];
+          if (!keyword.endsWith("s")) variations.push(`${keyword}s`);
+
+          for (const k of variations) {
+            const needle = ` ${k} `;
+            let index = clean.indexOf(needle);
+
+            while (index !== -1) {
+              matches.push({ keyword: k, index, length: needle.length });
+              index = clean.indexOf(needle, index + needle.length - 1);
+            }
+          }
+        }
+      }
+
+      matches.sort((a, b) => a.index - b.index || b.length - a.length);
+
+      const selected = [];
+      let lastEnd = -1;
+      for (const match of matches) {
+        if (match.index >= lastEnd) {
+          selected.push(match);
+          lastEnd = match.index + match.length - 1;
+        }
+      }
+      return selected;
+    }
+
+    function splitMultiFood(segment) {
+      const matches = findFoodMatchesInText(segment);
+      if (matches.length <= 1) return [segment];
+
+      const parsed = parseQuantityAndUnit(segment);
+      const prefix = buildQuantityPrefix(parsed.qty, parsed.unit);
+
+      return matches.map((match, index) => {
+        const keyword = match.keyword.trim();
+        if (index === 0 && prefix) return `${prefix} ${keyword}`;
+        return keyword;
+      });
+    }
+
+    function splitDescription(text) {
+      let normalized = text.toLowerCase();
+
+      normalized = normalized
+        .replace(/\bpbj\b/g, "peanut butter jelly")
+        .replace(/\bpb&j\b/g, "peanut butter jelly")
+        .replace(/\bmac\s*&\s*cheese\b/g, "macaroni cheese")
+        .replace(/\bmac and cheese\b/g, "macaroni cheese");
+
+      normalized = normalized
+        .replace(/\r/g, " ")
+        .replace(/&/g, " and ")
+        .replace(/\+/g, " and ")
+        .replace(/\bw\/\s*/g, " with ");
+
+      const segments = normalized
+        .split(/,|;|\n|\bthen\b|\bplus\b|\band\b/i)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const pieces = [];
+
+      function addPieces(part, withContext) {
+        if (!part) return;
+        const multi = splitMultiFood(part);
+        for (const piece of multi) {
+          if (piece && piece.trim()) pieces.push({ text: piece.trim(), withContext });
+        }
+      }
+
+      for (const segment of segments) {
+        if (!segment) continue;
+
+        if (segment.includes(" with ")) {
+          const parts = segment.split(" with ");
+          addPieces(parts[0], false);
+          for (let i = 1; i < parts.length; i++) addPieces(parts[i], true);
+        } else {
+          addPieces(segment, false);
+        }
+      }
+
+      return pieces;
+    }
+
+    function matchFood(text) {
+      const clean = cleanForMatching(text);
+      let best = null;
+
+      for (const food of FOODS) {
+        for (const keyword of food.keywords) {
+          const variations = [keyword];
+          if (!keyword.endsWith("s")) variations.push(`${keyword}s`);
+
+          for (const k of variations) {
+            if (clean.includes(` ${k} `)) {
+              if (!best || k.length > best.keyword.length) {
+                best = { food, keyword: k };
+              }
+            }
+          }
+        }
+      }
+
+      return best ? best.food : null;
+    }
+
+    function calculateCalories(food, qty, unit, explicitQty) {
+      if (!Number.isFinite(qty)) qty = 1;
+      if (qty <= 0) return 0;
+
+      if (!unit) {
+        if (!explicitQty && food.defaultCalories != null) return food.defaultCalories;
+        if (food.perPiece != null) return qty * food.perPiece;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        if (food.per100g != null) return qty * food.per100g;
+        return 0;
+      }
+
+      if (unit === "kg") { qty *= 1000; unit = "g"; }
+      if (unit === "oz") { qty *= 28.35; unit = "g"; }
+      if (unit === "l") { qty *= 1000; unit = "ml"; }
+
+      if (unit === "g") {
+        if (food.per100g != null) return (qty / 100) * food.per100g;
+        if (food.perCup != null) return (qty / (food.cupGrams || 100)) * food.perCup;
+        if (food.unitCalories != null) return (qty / (food.unitGrams || 100)) * food.unitCalories;
+        if (food.defaultCalories != null) return (qty / 100) * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "ml") {
+        if (food.per100ml != null) return (qty / 100) * food.per100ml;
+        if (food.per100g != null) return (qty / 100) * food.per100g;
+        if (food.perCup != null) return (qty / 240) * food.perCup;
+        return 0;
+      }
+
+      if (unit === "cup") {
+        if (food.perCup != null) return qty * food.perCup;
+        if (food.per100g != null) return qty * ((food.cupGrams || 100) / 100) * food.per100g;
+        if (food.perTbsp != null) return qty * 16 * food.perTbsp;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "tbsp") {
+        if (food.perTbsp != null) return qty * food.perTbsp;
+        if (food.perTsp != null) return qty * 3 * food.perTsp;
+        if (food.perCup != null) return (qty / 16) * food.perCup;
+        if (food.per100g != null) return (qty * 15 / 100) * food.per100g;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "tsp") {
+        if (food.perTsp != null) return qty * food.perTsp;
+        if (food.perTbsp != null) return (qty / 3) * food.perTbsp;
+        if (food.perCup != null) return (qty / 48) * food.perCup;
+        if (food.per100g != null) return (qty * 5 / 100) * food.per100g;
+        return 0;
+      }
+
+      if (unit === "slice") {
+        if (food.perSlice != null) return qty * food.perSlice;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "piece") {
+        if (food.perPiece != null) return qty * food.perPiece;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        if (food.perSlice != null) return qty * food.perSlice;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "can") {
+        if (food.perCan != null) return qty * food.perCan;
+        if (food.perBottle != null) return qty * food.perBottle;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "bottle") {
+        if (food.perBottle != null) return qty * food.perBottle;
+        if (food.perCan != null) return qty * food.perCan;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "glass") {
+        if (food.perGlass != null) return qty * food.perGlass;
+        if (food.perCup != null) return qty * food.perCup;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "clove") {
+        if (food.perClove != null) return qty * food.perClove;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        return 0;
+      }
+
+      if (unit === "scoop") {
+        if (food.perScoop != null) return qty * food.perScoop;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "bar") {
+        if (food.perPiece != null) return qty * food.perPiece;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return 0;
+      }
+
+      if (unit === "plate") {
+        if (food.perPlate != null) return qty * food.perPlate;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return qty * 400;
+      }
+
+      if (unit === "bowl") {
+        if (food.perBowl != null) return qty * food.perBowl;
+        if (food.perCup != null) return qty * food.perCup;
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        return qty * 250;
+      }
+
+      if (unit === "handful" || unit === "serving") {
+        if (food.defaultCalories != null) return qty * food.defaultCalories;
+        if (food.unitCalories != null) return qty * food.unitCalories;
+        return 0;
+      }
+
+      if (unit === "medium") {
+        const base = food.mediumCalories != null ? food.mediumCalories
+          : food.unitCalories != null ? food.unitCalories
+          : food.defaultCalories != null ? food.defaultCalories : 0;
+        return qty * base;
+      }
+
+      if (unit === "large") {
+        if (food.largeCalories != null) return qty * food.largeCalories;
+        if (food.unitLabel === "large") {
+          const base = food.unitCalories != null ? food.unitCalories
+            : food.defaultCalories != null ? food.defaultCalories : 0;
+          return qty * base;
+        }
+        const base = food.unitCalories != null ? food.unitCalories
+          : food.defaultCalories != null ? food.defaultCalories : 0;
+        return qty * (base ? base * 1.2 : 0);
+      }
+
+      if (unit === "small") {
+        if (food.smallCalories != null) return qty * food.smallCalories;
+        if (food.unitLabel === "small") {
+          const base = food.unitCalories != null ? food.unitCalories
+            : food.defaultCalories != null ? food.defaultCalories : 0;
+          return qty * base;
+        }
+        const base = food.unitCalories != null ? food.unitCalories
+          : food.defaultCalories != null ? food.defaultCalories : 0;
+        return qty * (base ? base * 0.8 : 0);
+      }
+
+      return 0;
+    }
+
+    function unknownEstimate(text, qty, unit) {
+      if (qty === 0) {
+        return { known: false, name: text, original: text, qty, unit, calories: 0, defaultUsed: true };
+      }
+
+      let calories = 180;
+
+      if (unit === "g" && qty) calories = qty * 1.5;
+      else if (unit === "oz" && qty) calories = qty * 42.5;
+      else if (unit === "cup" && qty) calories = qty * 200;
+      else if (unit === "tbsp" && qty) calories = qty * 50;
+      else if (unit === "tsp" && qty) calories = qty * 15;
+      else if (unit === "slice" && qty) calories = qty * 120;
+      else if (unit === "piece" && qty) calories = qty * 80;
+      else if (unit === "can" && qty) calories = qty * 150;
+      else if (unit === "bottle" && qty) calories = qty * 150;
+      else if (unit === "glass" && qty) calories = qty * 120;
+      else if (qty && qty > 1 && qty < 20) calories = 180 * qty;
+
+      const lower = text.toLowerCase();
+
+      if (/(water|diet|zero|black coffee|tea)/.test(lower)) {
+        calories = 0;
+      } else {
+        if (/small|light|lite|broth|vegetables|veggies|salad|fruit/.test(lower)) calories *= 0.65;
+        if (/large|double|extra|fried|creamy|cheesy|burger|burrito|dessert|cake|pizza|pasta|sandwich/.test(lower)) calories *= 1.25;
+      }
+
+      return {
+        known: false, name: text, original: text, qty, unit,
+        calories: Math.max(0, calories), defaultUsed: true
+      };
+    }
+
+    function estimatePiece(piece, withContext = false) {
+      const text = piece.trim();
+      if (!text) return null;
+
+      const parsed = parseQuantityAndUnit(text);
+      const food = matchFood(text);
+
+      if (!food) return unknownEstimate(text, parsed.qty, parsed.unit);
+
+      const explicitQty = parsed.qty !== null;
+      let qty = parsed.qty;
+      let unit = parsed.unit;
+
+      if (!explicitQty) {
+        if (withContext && food.withQty != null) {
+          qty = food.withQty;
+          unit = food.withUnit || food.defaultUnit || null;
+        } else {
+          qty = food.defaultQty != null ? food.defaultQty : 1;
+          unit = food.defaultUnit || null;
+        }
+      } else if (!unit) {
+        if (food.type === "weight" && qty >= 20) unit = "g";
+      }
+
+      let calories = calculateCalories(food, qty, unit, explicitQty);
+      if (!Number.isFinite(calories)) calories = 0;
+
+      const macros = estimateMacros(food, Math.max(0, calories));
+
+      return {
+        known: true, name: food.name, original: text, qty, unit,
+        calories: Math.max(0, calories),
+        protein: macros.protein,
+        fat: macros.fat,
+        defaultUsed: !explicitQty, withContext
+      };
+    }
+
+    function estimateDescription(text) {
+      const pieces = splitDescription(text);
+      const items = [];
+
+      for (const piece of pieces) {
+        const item = estimatePiece(piece.text, piece.withContext);
+        if (item && Number.isFinite(item.calories)) items.push(item);
+      }
+
+      const total = items.reduce((sum, item) => sum + Number(item.calories || 0), 0);
+      return { items, total };
+    }
+
+    function estimateItemDetail(item) {
+      if (!item.known) return "Estimated unknown food";
+
+      const parts = [];
+      if (item.qty != null) {
+        let qtyText = String(item.qty);
+        if (item.unit) qtyText += ` ${item.unit}`;
+        parts.push(qtyText);
+      }
+      if (item.withContext) parts.push("added ingredient");
+      if (item.defaultUsed) parts.push("estimated portion");
+      return parts.join(" • ") || "estimated";
+    }
+
+    function clearEstimate() {
+      lastEstimate = { items: [], total: 0 };
+      estimatePreviewEl.innerHTML = "";
+      estimatePreviewEl.hidden = true;
+      addOneBtn.disabled = true;
+      addSeparateBtn.disabled = true;
+    }
+
+    function renderEstimate(result) {
+      estimatePreviewEl.innerHTML = "";
+
+      if (!result.items.length) {
+        estimatePreviewEl.hidden = false;
+        const message = document.createElement("div");
+        message.className = "small-note";
+        message.textContent = "Could not estimate that. Try adding more detail, or use manual add.";
+        estimatePreviewEl.appendChild(message);
+        addOneBtn.disabled = true;
+        addSeparateBtn.disabled = true;
+        return;
+      }
+
+      for (const item of result.items) {
+        const row = document.createElement("div");
+        row.className = "preview-item";
+
+        const left = document.createElement("div");
+        const title = document.createElement("div");
+        title.textContent = item.known ? item.name : item.original;
+
+        const detail = document.createElement("div");
+        detail.className = "preview-note";
+
+        let detailText = estimateItemDetail(item);
+
+        if (item.protein != null || item.fat != null) {
+          const macroParts = [];
+          if (item.protein != null) macroParts.push(`P ${item.protein}g`);
+          if (item.fat != null) macroParts.push(`F ${item.fat}g`);
+          detailText += ` • ${macroParts.join(" • ")}`;
+        }
+
+        detail.textContent = detailText;
+
+        left.appendChild(title);
+        left.appendChild(detail);
+
+        const right = document.createElement("div");
+        right.className = "preview-calories";
+        right.textContent = `${Math.round(item.calories).toLocaleString()} cal`;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        estimatePreviewEl.appendChild(row);
+      }
+
+      const totalRow = document.createElement("div");
+      totalRow.className = "preview-total";
+
+      const totalLabel = document.createElement("div");
+      totalLabel.textContent = "Estimated total";
+
+      const totalValue = document.createElement("div");
+      totalValue.textContent = `${Math.round(result.total).toLocaleString()} cal`;
+
+      totalRow.appendChild(totalLabel);
+      totalRow.appendChild(totalValue);
+      estimatePreviewEl.appendChild(totalRow);
+
+      const totalProtein = result.items.reduce((s, i) => s + Number(i.protein || 0), 0);
+      const totalFat = result.items.reduce((s, i) => s + Number(i.fat || 0), 0);
+
+      if (totalProtein > 0 || totalFat > 0) {
+        const macroRow = document.createElement("div");
+        macroRow.className = "preview-total";
+        macroRow.style.borderTop = "0";
+        macroRow.style.paddingTop = "4px";
+
+        const macroLabel = document.createElement("div");
+        macroLabel.textContent = "Protein / Fat";
+
+        const macroValue = document.createElement("div");
+        macroValue.textContent = `${Math.round(totalProtein)} g / ${Math.round(totalFat)} g`;
+
+        macroRow.appendChild(macroLabel);
+        macroRow.appendChild(macroValue);
+        estimatePreviewEl.appendChild(macroRow);
+      }
+
+      estimatePreviewEl.hidden = false;
+      addOneBtn.disabled = false;
+      addSeparateBtn.disabled = false;
+    }
+
+    // ---------- OpenRouter (optional AI) ----------
+    function getOpenRouterKey() {
+      const fromInput = openrouterKeyEl ? openrouterKeyEl.value.trim() : "";
+      return fromInput || localStorage.getItem(OPENROUTER_KEY_STORAGE) || "";
+    }
+
+    function getOpenRouterModule() {
+      const fromInput = openrouterModelEl ? openrouterModelEl.value.trim() : "";
+      return fromInput || localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
+    }
+
+    function setAiStatus(message) {
+      const aiStatusEl = document.getElementById("aiStatus");
+      if (aiStatusEl) aiStatusEl.textContent = message;
+    }
+
+    if (openrouterKeyEl) {
+      openrouterKeyEl.value = localStorage.getItem(OPENROUTER_KEY_STORAGE) || "";
+    }
+    if (openrouterModelEl) {
+      openrouterModelEl.value = localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
+    }
+
+    function updateAiSettingsVisibility() {
+      const hasKey = getOpenRouterKey().length > 0;
+
+      if (aiSettingsCardEl) aiSettingsCardEl.hidden = hasKey;
+      if (aiSavedBarEl) aiSavedBarEl.hidden = !hasKey;
+    }
+
+    if (saveAiSettingsBtn) {
+      saveAiSettingsBtn.addEventListener("click", () => {
+        localStorage.setItem(OPENROUTER_KEY_STORAGE, openrouterKeyEl ? openrouterKeyEl.value.trim() : "");
+        localStorage.setItem(OPENROUTER_MODEL_STORAGE, openrouterModelEl ? openrouterModelEl.value.trim() : "openrouter/free");
+
+        setAiStatus("AI settings saved.");
+        updateAiSettingsVisibility();
+      });
+    }
+
+    if (editAiSettingsBtn) {
+      editAiSettingsBtn.addEventListener("click", () => {
+        if (aiSettingsCardEl) aiSettingsCardEl.hidden = false;
+        if (aiSavedBarEl) aiSavedBarEl.hidden = true;
+      });
+    }
+
+    function extractJsonFromAi(text) {
+      if (!text) throw new Error("Empty AI response");
+      const trimmed = String(text).trim();
+
+      const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fenceMatch && fenceMatch[1]) {
+        try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+      }
+
+      try { return JSON.parse(trimmed); } catch {}
+
+      const firstObject = trimmed.indexOf("{");
+      const lastObject = trimmed.lastIndexOf("}");
+      if (firstObject !== -1 && lastObject !== -1 && lastObject > firstObject) {
+        try { return JSON.parse(trimmed.slice(firstObject, lastObject + 1)); } catch {}
+      }
+
+      const firstArray = trimmed.indexOf("[");
+      const lastArray = trimmed.lastIndexOf("]");
+      if (firstArray !== -1 && lastArray !== -1 && lastArray > firstArray) {
+        try { return JSON.parse(trimmed.slice(firstArray, lastArray + 1)); } catch {}
+      }
+
+      throw new Error("AI response was not valid JSON");
+    }
+
+    function normalizeAiEstimate(parsed) {
+      if (!parsed) return { items: [], total: 0 };
+
+      let rawItems = [];
+      if (Array.isArray(parsed)) rawItems = parsed;
+      else if (Array.isArray(parsed.items)) rawItems = parsed.items;
+      else if (Array.isArray(parsed.foods)) rawItems = parsed.foods;
+      else if (Array.isArray(parsed.results)) rawItems = parsed.results;
+      else if (parsed.name || parsed.food || parsed.item) rawItems = [parsed];
+
+      const items = [];
+
+      for (const raw of rawItems) {
+        if (!raw) continue;
+
+        if (typeof raw === "string") {
+          items.push({ known: false, name: raw, original: raw, qty: null, unit: null, calories: 0, protein: null, fat: null, defaultUsed: true, withContext: false });
+          continue;
+        }
+
+        const name = String(raw.name || raw.food || raw.item || raw.food_name || "Food");
+
+        let calories = Number(
+          raw.calories != null ? raw.calories
+          : raw.kcal != null ? raw.kcal
+          : raw.calorie != null ? raw.calorie
+          : raw.energy != null ? raw.energy
+          : 0
+        );
+        if (!Number.isFinite(calories)) calories = 0;
+
+        const quantity = raw.quantity != null ? raw.quantity
+          : raw.amount != null ? raw.amount
+          : raw.serving != null ? raw.serving
+          : raw.portion != null ? raw.portion
+          : null;
+
+        const protein = Number(raw.protein_g != null ? raw.protein_g : raw.protein != null ? raw.protein : NaN);
+        const fat = Number(raw.fat_g != null ? raw.fat_g : raw.fat != null ? raw.fat : NaN);
+
+        items.push({
+          known: true, name, original: name, qty: quantity, unit: null,
+          calories: Math.max(0, calories),
+          protein: Number.isFinite(protein) ? Math.round(protein * 10) / 10 : null,
+          fat: Number.isFinite(fat) ? Math.round(fat * 10) / 10 : null,
+          defaultUsed: false, withContext: false
+        });
+      }
+
+      let total = Number(
+        parsed.total_calories != null ? parsed.total_calories
+        : parsed.totalCalories != null ? parsed.totalCalories
+        : parsed.total != null ? parsed.total
+        : parsed.calories != null ? parsed.calories
+        : parsed.kcal != null ? parsed.kcal
+        : NaN
+      );
+
+      if (!Number.isFinite(total)) {
+        total = items.reduce((sum, item) => sum + Number(item.calories || 0), 0);
+      }
+      total = Math.max(0, total);
+
+      if (!items.length && total > 0) {
+        items.push({ known: true, name: "AI estimate", original: "AI estimate", qty: null, unit: null, calories: total, protein: null, fat: null, defaultUsed: false, withContext: false });
+      }
+
+      return { items, total };
+    }
+
+    async function estimateWithOpenRouter(text, apiKey, model) {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": window.location.href || "https://localhost",
+          "X-Title": "Calorie Journal"
+        },
+        body: JSON.stringify({
+          model: model || "openrouter/free",
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content: `
+You are a nutrition estimation engine.
+The user will describe a meal. Estimate the calories.
+Return ONLY valid JSON. No markdown. No explanations.
+Use this exact format:
+{"items":[{"name":"food name","quantity":"amount","calories":number,"protein_g":number,"fat_g":number}],"total_calories":number}
+If unsure, estimate conservatively.`.trim()
+            },
+            { role: "user", content: text }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `OpenRouter error ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+
+      if (!content) throw new Error("OpenRouter returned no content");
+
+      return normalizeAiEstimate(extractJsonFromAi(content));
+    }
+
+    // ---------- Water tracking ----------
+    function mlToDisplay(ml) {
+      return waterUnit === "oz" ? ml / 29.5735 : ml;
+    }
+
+    function dayWater() {
+      return waterEntries
+        .filter(w => w.date === dateEl.value)
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    }
+
+    function addWaterMl(ml) {
+      if (!Number.isFinite(ml) || ml <= 0) return;
+
+      waterEntries.push({
+        id: uid(),
+        date: dateEl.value,
+        time: nowTime(),
+        ml: Math.round(ml),
+        createdAt: Date.now()
+      });
+
+      saveWater();
+      renderWater();
+    }
+
+    function renderWater() {
+      if (!waterSummaryEl || !waterBarEl || !waterListEl) return;
+
+      const list = dayWater();
+      const totalMl = list.reduce((sum, w) => sum + Number(w.ml || 0), 0);
+
+      const percent = waterGoalMl > 0
+        ? Math.min(100, (totalMl / waterGoalMl) * 100)
+        : 0;
+      waterBarEl.style.width = percent + "%";
+
+      waterSummaryEl.textContent =
+        `${Math.round(mlToDisplay(totalMl)).toLocaleString()} ${waterUnit} of ` +
+        `${Math.round(mlToDisplay(waterGoalMl)).toLocaleString()} ${waterUnit} • ` +
+        `${list.length} drink${list.length === 1 ? "" : "s"}`;
+
+      waterListEl.innerHTML = "";
+      const recent = list.slice(-6).reverse();
+
+      for (const w of recent) {
+        const row = document.createElement("div");
+        row.className = "preview-item";
+
+        const left = document.createElement("div");
+        left.textContent = `${w.time || ""} — ${Math.round(mlToDisplay(w.ml)).toLocaleString()} ${waterUnit}`;
+
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.type = "button";
+        del.textContent = "Delete";
+        del.onclick = () => {
+          waterEntries = waterEntries.filter(x => x.id !== w.id);
+          saveWater();
+          renderWater();
+        };
+
+        row.appendChild(left);
+        row.appendChild(del);
+        waterListEl.appendChild(row);
+      }
+    }
+
+    if (waterCupBtn) waterCupBtn.addEventListener("click", () => addWaterMl(250));
+    if (waterBottleBtn) waterBottleBtn.addEventListener("click", () => addWaterMl(500));
+
+    if (waterAddBtn) {
+      waterAddBtn.addEventListener("click", () => {
+        const raw = String(waterCustomEl ? waterCustomEl.value : "").trim().replace(",", ".");
+        const value = Number(raw);
+
+        if (!Number.isFinite(value) || value <= 0) {
+          if (waterSummaryEl) {
+            waterSummaryEl.textContent = "Enter an amount first, for example 300";
+          }
+          return;
+        }
+
+        const ml = waterUnit === "oz" ? value * 29.5735 : value;
+        addWaterMl(ml);
+        if (waterCustomEl) waterCustomEl.value = "";
+      });
+    }
+
+    if (waterUnitEl) {
+      waterUnitEl.addEventListener("change", () => {
+        waterUnit = waterUnitEl.value === "oz" ? "oz" : "ml";
+        saveWater();
+        if (waterGoalEl) waterGoalEl.value = Math.round(mlToDisplay(waterGoalMl));
+        renderWater();
+      });
+    }
+
+    if (waterGoalEl) {
+      waterGoalEl.addEventListener("change", () => {
+        const value = Number(waterGoalEl.value);
+        if (!Number.isFinite(value) || value <= 0) return;
+        waterGoalMl = Math.round(waterUnit === "oz" ? value * 29.5735 : value);
+        saveWater();
+        renderWater();
+      });
+    }
+
+    // ---------- Weight tracking ----------
+    function toDisplayUnit(value, fromUnit) {
+      if (fromUnit === weightUnit) return value;
+      if (fromUnit === "kg" && weightUnit === "lb") return value * 2.2046226218;
+      if (fromUnit === "lb" && weightUnit === "kg") return value / 2.2046226218;
+      return value;
+    }
+
+    function sortedWeights() {
+      return weights.slice().sort((a, b) => {
+        return (
+          (a.date || "").localeCompare(b.date || "") ||
+          (a.createdAt || 0) - (b.createdAt || 0)
+        );
+      });
+    }
+
+    function displayWeights() {
+      return sortedWeights().map(w => ({
+        ...w,
+        display: toDisplayUnit(Number(w.weight), w.unit || weightUnit)
+      }));
+    }
+
+    function isoDaysAgo(isoDate, days) {
+      const d = new Date(isoDate + "T00:00:00");
+      d.setDate(d.getDate() - days);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 10);
+    }
+
+    function renderWeightList(list) {
+      weightListEl.innerHTML = "";
+      if (!list.length) return;
+
+      const recent = list.slice(-10).reverse();
+
+      for (const w of recent) {
+        const row = document.createElement("div");
+        row.className = "preview-item";
+
+        const left = document.createElement("div");
+        left.textContent = `${w.date} — ${w.display.toFixed(1)} ${weightUnit}`;
+
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.type = "button";
+        del.textContent = "Delete";
+        del.onclick = () => {
+          weights = weights.filter(x => x.id !== w.id);
+          saveWeights();
+          renderWeights();
+        };
+
+        row.appendChild(left);
+        row.appendChild(del);
+        weightListEl.appendChild(row);
+      }
+    }
+
+    function renderWeightChart(list) {
+      const canvas = weightChartEl;
+      const ctx = canvas.getContext("2d");
+
+      const cssWidth = canvas.clientWidth || 320;
+      const cssHeight = canvas.clientHeight || 220;
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = Math.round(cssWidth * dpr);
+      canvas.height = Math.round(cssHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      if (list.length < 2) {
+        weightChartNoteEl.textContent = "Log at least two weights to see the trend chart.";
+        return;
+      }
+
+      weightChartNoteEl.textContent = "Green: logged weight • Yellow: trend (moving average)";
+
+      const pad = { top: 12, right: 12, bottom: 26, left: 44 };
+      const w = cssWidth - pad.left - pad.right;
+      const h = cssHeight - pad.top - pad.bottom;
+
+      const times = list.map(x => new Date(x.date + "T00:00:00").getTime());
+      const tMin = Math.min(...times);
+      const tMax = Math.max(...times);
+
+      const values = list.map(x => x.display);
+      let vMin = Math.min(...values);
+      let vMax = Math.max(...values);
+
+      if (vMax - vMin < 1) { vMax += 0.5; vMin -= 0.5; }
+
+      const vPad = (vMax - vMin) * 0.1;
+      vMin -= vPad;
+      vMax += vPad;
+
+      const xFor = t => pad.left + (tMax === tMin ? w / 2 : ((t - tMin) / (tMax - tMin)) * w);
+      const yFor = v => pad.top + (1 - (v - vMin) / (vMax - vMin)) * h;
+
+      ctx.strokeStyle = "#1e293b";
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "right";
+
+      const ticks = 4;
+      for (let i = 0; i <= ticks; i++) {
+        const v = vMin + ((vMax - vMin) * i) / ticks;
+        const y = yFor(v);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + w, y);
+        ctx.stroke();
+        ctx.fillText(v.toFixed(1), pad.left - 6, y + 3);
+      }
+
+      ctx.textAlign = "left";
+      ctx.fillText(list[0].date.slice(5), pad.left, cssHeight - 8);
+      ctx.textAlign = "right";
+      ctx.fillText(list[list.length - 1].date.slice(5), pad.left + w, cssHeight - 8);
+
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      list.forEach((x, i) => {
+        const px = xFor(times[i]);
+        const py = yFor(x.display);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "#22c55e";
+      list.forEach((x, i) => {
+        ctx.beginPath();
+        ctx.arc(xFor(times[i]), yFor(x.display), 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      const alpha = 0.35;
+      let ema = values[0];
+
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      list.forEach((x, i) => {
+        ema = i === 0 ? values[0] : alpha * values[i] + (1 - alpha) * ema;
+        const px = xFor(times[i]);
+        const py = yFor(ema);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+    }
+
+    function renderWeights() {
+      if (!weightSummaryEl || !weightListEl || !weightChartEl) return;
+
+      const list = displayWeights();
+
+      if (!list.length) {
+        weightSummaryEl.textContent = "No weight logs yet.";
+      } else {
+        const first = list[0];
+        const latest = list[list.length - 1];
+        const change = latest.display - first.display;
+
+        let summary =
+          `Current: ${latest.display.toFixed(1)} ${weightUnit}` +
+          ` • Total: ${change >= 0 ? "+" : ""}${change.toFixed(1)} ${weightUnit}`;
+
+        const cutoff = isoDaysAgo(latest.date, 30);
+        const before30 = list.filter(x => x.date <= cutoff);
+
+        if (before30.length) {
+          const ref = before30[before30.length - 1];
+          const monthChange = latest.display - ref.display;
+          summary += ` • 30d: ${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)} ${weightUnit}`;
+        }
+
+        weightSummaryEl.textContent = summary;
+      }
+
+      renderWeightList(list);
+      renderWeightChart(list);
+    }
+
+    if (addWeightBtn) {
+      addWeightBtn.addEventListener("click", () => {
+        if (!weightValueEl) return;
+
+        const raw = String(weightValueEl.value).trim().replace(",", ".");
+        const value = Number(raw);
+        const date = (weightDateEl && weightDateEl.value) || localToday();
+
+        if (!Number.isFinite(value) || value <= 0) {
+          if (weightSummaryEl) {
+            weightSummaryEl.textContent = "Enter your weight first, for example 70.5";
+          }
+          return;
+        }
+
+        weights.push({ id: uid(), date, weight: value, unit: weightUnit, createdAt: Date.now() });
+        saveWeights();
+        weightValueEl.value = "";
+        renderWeights();
+      });
+    }
+
+    if (weightUnitEl) {
+      weightUnitEl.addEventListener("change", () => {
+        weightUnit = weightUnitEl.value === "lb" ? "lb" : "kg";
+        saveWeights();
+        renderWeights();
+      });
+    }
+
+    if (exportWeightsBtn) {
+      exportWeightsBtn.addEventListener("click", () => {
+        const list = sortedWeights();
+        const rows = [["date", "weight", "unit"]];
+        for (const w of list) rows.push([w.date, w.weight, w.unit || weightUnit]);
+
+        const csv = rows
+          .map(row => row.map(cell => `"${String(cell == null ? "" : cell).replace(/"/g, '""')}"`).join(","))
+          .join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `weight-log-${localToday()}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    window.addEventListener("resize", () => {
+      if (weightChartEl) renderWeightChart(displayWeights());
+    });
+
+    // ---------- Exercise ----------
+    if (exerciseForm) {
+      exerciseForm.addEventListener("submit", event => {
+        event.preventDefault();
+
+        const calories = Math.max(0, Number(exerciseCaloriesEl.value || 0));
+        if (!exerciseNameEl.value.trim() || !Number.isFinite(calories) || calories <= 0) return;
+
+        entries.push({
+          id: uid(),
+          date: dateEl.value,
+          time: nowTime(),
+          food: exerciseNameEl.value.trim(),
+          calories,
+          type: "exercise",
+          minutes: exerciseMinutesEl.value ? Number(exerciseMinutesEl.value) : null,
+          protein: null,
+          notes: "",
+          createdAt: Date.now()
+        });
+
+        save();
+        render();
+        exerciseForm.reset();
+      });
+    }
+
+    // ---------- Main events ----------
+    estimateBtn.addEventListener("click", async () => {
+      const text = mealTextEl.value.trim();
+      if (!text) return;
+
+      const apiKey = getOpenRouterKey();
+      const model = getOpenRouterModule();
+
+      estimateBtn.disabled = true;
+      estimateBtn.textContent = "Estimating...";
+      setAiStatus("");
+
+      try {
+        if (apiKey) {
+          lastEstimate = await estimateWithOpenRouter(text, apiKey, model);
+        } else {
+          lastEstimate = estimateDescription(text);
+        }
+        renderEstimate(lastEstimate);
+      } catch (error) {
+        console.error(error);
+        setAiStatus(`AI estimation failed: ${error.message}. Using local estimate instead.`);
+        lastEstimate = estimateDescription(text);
+        renderEstimate(lastEstimate);
+      } finally {
+        estimateBtn.disabled = false;
+        estimateBtn.textContent = "Estimate calories";
+      }
+    });
+
+    addOneBtn.addEventListener("click", () => {
+      if (!lastEstimate.items.length) return;
+
+      const description = mealTextEl.value.trim();
+      const total = Math.round(lastEstimate.total);
+
+      const notes = lastEstimate.items
+        .map(item => `${item.known ? item.name : item.original}: ${Math.round(item.calories)} cal`)
+        .join("\n");
+
+      const mealProtein = lastEstimate.items.reduce((s, i) => s + Number(i.protein || 0), 0);
+      const mealFat = lastEstimate.items.reduce((s, i) => s + Number(i.fat || 0), 0);
+
+      entries.push({
+        id: uid(), date: dateEl.value, time: nowTime(),
+        food: description.slice(0, 90) || "Meal log",
+        calories: total,
+        protein: mealProtein > 0 ? Math.round(mealProtein * 10) / 10 : null,
+        fat: mealFat > 0 ? Math.round(mealFat * 10) / 10 : null,
+        notes, createdAt: Date.now()
+      });
+
+      save();
+      render();
+      mealTextEl.value = "";
+      clearEstimate();
+    });
+
+    addSeparateBtn.addEventListener("click", () => {
+      if (!lastEstimate.items.length) return;
+
+      const description = mealTextEl.value.trim();
+
+      for (const item of lastEstimate.items) {
+        entries.push({
+          id: uid(), date: dateEl.value, time: nowTime(),
+          food: item.known ? item.name : item.original.slice(0, 80),
+          calories: Math.round(item.calories),
+          protein: item.protein != null ? item.protein : null,
+          fat: item.fat != null ? item.fat : null,
+          notes: description, createdAt: Date.now()
+        });
+      }
+
+      save();
+      render();
+      mealTextEl.value = "";
+      clearEstimate();
+    });
+
+    manualForm.addEventListener("submit", event => {
+      event.preventDefault();
+
+      const calories = Math.max(0, Number(manualCaloriesEl.value || 0));
+      if (!manualFoodEl.value.trim() || !Number.isFinite(calories)) return;
+
+      entries.push({
+        id: uid(), date: dateEl.value, time: nowTime(),
+        food: manualFoodEl.value.trim(), calories,
+        protein: manualProteinEl.value ? Number(manualProteinEl.value) : null,
+        fat: manualFatEl && manualFatEl.value ? Number(manualFatEl.value) : null,
+        notes: manualNotesEl.value.trim(), createdAt: Date.now()
+      });
+
+      save();
+      render();
+      manualForm.reset();
+    });
+
+    goalEl.addEventListener("change", () => {
+      goal = Math.max(0, Number(goalEl.value || 0));
+      save();
+      render();
+    });
+
+    dateEl.addEventListener("change", () => {
+      render();
+      renderWater();
+      renderWeights();
+    });
+
+    exportBtn.addEventListener("click", () => {
+      const list = dayEntries();
+      const rows = [["date", "time", "type", "food", "calories", "protein_g", "fat_g", "notes"]];
+
+      for (const entry of list) {
+        rows.push([
+          entry.date,
+          entry.time || "",
+          isExercise(entry) ? "exercise" : "food",
+          entry.food,
+          entry.calories,
+          entry.protein || "",
+          entry.fat || "",
+          entry.notes || ""
+        ]);
+      }
+
+      const csv = rows
+        .map(row => row.map(cell => `"${String(cell == null ? "" : cell).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `calorie-journal-${dateEl.value}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ---------- Init ----------
+    if (waterUnitEl) waterUnitEl.value = waterUnit;
+    if (waterGoalEl) waterGoalEl.value = Math.round(mlToDisplay(waterGoalMl));
+
+    if (weightDateEl) weightDateEl.value = localToday();
+    if (weightUnitEl) weightUnitEl.value = weightUnit;
+
+    dateEl.value = localToday();
+    goalEl.value = goal;
+
+    updateAiSettingsVisibility();
+
+    renderWeights();
+    renderWater();
+    render();
+  </script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./service-worker.js")
+          .catch(error => {
+            console.warn("Service worker registration failed:", error);
+          });
+      });
+    }
+  </script>
+</body>
+</html>
