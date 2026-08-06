@@ -46,9 +46,12 @@
     .secondary { width: 100%; background: #334155; color: #e2e8f0; font-weight: 600; margin-top: 10px; }
     .small { background: #334155; color: #e2e8f0; padding: 8px 10px; }
     .danger { background: #7f1d1d; color: #fecaca; padding: 8px 10px; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
-    .stat { background: #111827; border: 1px solid #334155; border-radius: 18px; padding: 14px; text-align: center; }
-    .stat span { display: block; font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+    @media (max-width: 480px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    .stat { background: #111827; border: 1px solid #334155; border-radius: 18px; padding: 12px 8px; text-align: center; }
+    .stat span { display: block; font-size: 20px; font-weight: 800; margin-bottom: 4px; }
     .stat small { opacity: 0.7; }
     .progress { height: 14px; background: #1e293b; border-radius: 999px; overflow: hidden; margin-bottom: 16px; }
     .bar { height: 100%; width: 0%; background: #22c55e; transition: width 0.25s; }
@@ -82,7 +85,8 @@
     </section>
 
     <section class="stats">
-      <div class="stat"><span id="logged">0</span><small>Logged</small></div>
+      <div class="stat"><span id="foodStat">0</span><small>Food</small></div>
+      <div class="stat"><span id="burnStat">0</span><small>Exercise</small></div>
       <div class="stat"><span id="goalStat">0</span><small>Goal</small></div>
       <div class="stat"><span id="remaining">0</span><small>Remaining</small></div>
     </section>
@@ -143,6 +147,25 @@
       <label for="manualNotes">Notes</label>
       <textarea id="manualNotes" placeholder="Optional notes..."></textarea>
       <button class="primary" type="submit">Add manual entry</button>
+    </form>
+        <form id="exerciseForm" class="card">
+      <h2>Add exercise</h2>
+      <label for="exerciseName">Activity</label>
+      <input id="exerciseName" placeholder="e.g. Brisk walk" required />
+      <div class="row">
+        <div>
+          <label for="exerciseCalories">Calories burned</label>
+          <input id="exerciseCalories" type="number" min="0" step="1" placeholder="200" required />
+        </div>
+        <div>
+          <label for="exerciseMinutes">Minutes (optional)</label>
+          <input id="exerciseMinutes" type="number" min="0" step="1" placeholder="30" />
+        </div>
+      </div>
+      <div class="small-note">
+        Rough guide: 30 min brisk walk ≈ 150–200 cal • 30 min jog ≈ 300 cal • 30 min cycling ≈ 250 cal
+      </div>
+      <button class="primary" type="submit">Add exercise</button>
     </form>
         <section class="card">
       <div class="list-head">
@@ -354,7 +377,8 @@
 
     const dateEl = document.getElementById("date");
     const goalEl = document.getElementById("goal");
-    const loggedEl = document.getElementById("logged");
+    const foodStatEl = document.getElementById("foodStat");
+    const burnStatEl = document.getElementById("burnStat");
     const goalStatEl = document.getElementById("goalStat");
     const remainingEl = document.getElementById("remaining");
     const barEl = document.getElementById("bar");
@@ -459,16 +483,19 @@
     function render() {
       const list = dayEntries();
 
-      const total = list.reduce((sum, entry) => sum + Number(entry.calories || 0), 0);
-      const remaining = goal - total;
+      const foodTotal = list.reduce((sum, entry) => sum + (isExercise(entry) ? 0 : Number(entry.calories || 0)), 0);
+      const burnTotal = list.reduce((sum, entry) => sum + (isExercise(entry) ? Number(entry.calories || 0) : 0), 0);
+      const net = foodTotal - burnTotal;
+      const remaining = goal - net;
 
-      loggedEl.textContent = total.toLocaleString();
+      foodStatEl.textContent = foodTotal.toLocaleString();
+      burnStatEl.textContent = burnTotal.toLocaleString();
       goalStatEl.textContent = goal.toLocaleString();
       remainingEl.textContent = remaining.toLocaleString();
 
-      const percent = goal > 0 ? Math.min(100, (total / goal) * 100) : 0;
+      const percent = goal > 0 ? Math.min(100, (Math.max(0, net) / goal) * 100) : 0;
       barEl.style.width = percent + "%";
-      barEl.classList.toggle("over", total > goal);
+      barEl.classList.toggle("over", net > goal);
 
       entriesEl.innerHTML = "";
 
@@ -487,14 +514,16 @@
         const top = document.createElement("div");
         top.className = "entry-top";
 
-        const left = document.createElement("div");
+                const left = document.createElement("div");
         const title = document.createElement("strong");
-        title.textContent = entry.food;
+        title.textContent = isExercise(entry) ? `🏃 ${entry.food}` : entry.food;
         left.appendChild(title);
 
         const right = document.createElement("div");
         const calories = document.createElement("strong");
-        calories.textContent = `${Number(entry.calories || 0).toLocaleString()} cal`;
+        calories.textContent = isExercise(entry)
+          ? `−${Number(entry.calories || 0).toLocaleString()} cal`
+          : `${Number(entry.calories || 0).toLocaleString()} cal`;
         right.appendChild(calories);
 
         top.appendChild(left);
@@ -503,7 +532,8 @@
         const meta = document.createElement("div");
         meta.className = "muted";
         const proteinText = entry.protein ? ` • ${entry.protein}g protein` : "";
-        meta.textContent = `${entry.time || ""}${proteinText}`;
+        const minutesText = entry.minutes ? ` • ${entry.minutes} min` : "";
+        meta.textContent = `${entry.time || ""}${proteinText}${minutesText}`;
 
         const actions = document.createElement("div");
         actions.style.marginTop = "10px";
@@ -1539,7 +1569,41 @@ If unsure, estimate conservatively.`.trim()
       mealTextEl.value = "";
       clearEstimate();
     });
+    // ---------- Exercise tracking ----------
+    const exerciseForm = document.getElementById("exerciseForm");
+    const exerciseNameEl = document.getElementById("exerciseName");
+    const exerciseCaloriesEl = document.getElementById("exerciseCalories");
+    const exerciseMinutesEl = document.getElementById("exerciseMinutes");
 
+    function isExercise(entry) {
+      return !!entry && entry.type === "exercise";
+    }
+
+    if (exerciseForm) {
+      exerciseForm.addEventListener("submit", event => {
+        event.preventDefault();
+
+        const calories = Math.max(0, Number(exerciseCaloriesEl.value || 0));
+        if (!exerciseNameEl.value.trim() || !Number.isFinite(calories) || calories <= 0) return;
+
+        entries.push({
+          id: uid(),
+          date: dateEl.value,
+          time: nowTime(),
+          food: exerciseNameEl.value.trim(),
+          calories,
+          type: "exercise",
+          minutes: exerciseMinutesEl.value ? Number(exerciseMinutesEl.value) : null,
+          protein: null,
+          notes: "",
+          createdAt: Date.now()
+        });
+
+        save();
+        render();
+        exerciseForm.reset();
+      });
+    }
     manualForm.addEventListener("submit", event => {
       event.preventDefault();
 
@@ -1571,10 +1635,18 @@ If unsure, estimate conservatively.`.trim()
 
     exportBtn.addEventListener("click", () => {
       const list = dayEntries();
-      const rows = [["date", "time", "food", "calories", "protein_g", "notes"]];
+      const rows = [["date", "time", "type", "food", "calories", "protein_g", "notes"]];
 
       for (const entry of list) {
-        rows.push([entry.date, entry.time || "", entry.food, entry.calories, entry.protein || "", entry.notes || ""]);
+        rows.push([
+          entry.date,
+          entry.time || "",
+          isExercise(entry) ? "exercise" : "food",
+          entry.food,
+          entry.calories,
+          entry.protein || "",
+          entry.notes || ""
+        ]);
       }
 
       const csv = rows
