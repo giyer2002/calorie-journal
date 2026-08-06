@@ -266,7 +266,47 @@
 <body>
   <main class="app">
     <h1>🍽️ Calorie Journal</h1>
+    <section class="card">
+      <div class="list-head">
+        <h2>Weight & trend</h2>
+        <button id="exportWeightsBtn" class="small" type="button">Export CSV</button>
+      </div>
 
+      <div class="row">
+        <div>
+          <label for="weightDate">Date</label>
+          <input id="weightDate" type="date" />
+        </div>
+        <div>
+          <label for="weightValue">Weight</label>
+          <input
+            id="weightValue"
+            type="number"
+            min="0"
+            step="0.1"
+            placeholder="70.0"
+          />
+        </div>
+      </div>
+
+      <label for="weightUnit">Unit</label>
+      <select id="weightUnit">
+        <option value="kg">kg</option>
+        <option value="lb">lb</option>
+      </select>
+
+      <button id="addWeightBtn" class="primary" type="button">Log weight</button>
+
+      <div id="weightSummary" class="small-note"></div>
+
+      <canvas
+        id="weightChart"
+        style="width: 100%; height: 220px; display: block; margin-top: 12px;"
+      ></canvas>
+      <div id="weightChartNote" class="small-note"></div>
+
+      <div id="weightList" style="margin-top: 12px;"></div>
+    </section>
     <section class="card">
       <label for="date">Date</label>
       <input id="date" type="date" />
