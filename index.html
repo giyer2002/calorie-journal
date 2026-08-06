@@ -91,7 +91,8 @@
       <div class="stat"><span id="remaining">0</span><small>Remaining</small></div>
     </section>
 
-    <div class="progress"><div id="bar" class="bar"></div></div>
+        <div class="progress"><div id="bar" class="bar"></div></div>
+    <div id="macroSummary" class="small-note" style="margin-bottom: 12px;"></div>
 
     <section class="card" id="aiSettingsCard">
       <h2>AI settings</h2>
@@ -134,12 +135,20 @@
       <h2>Manual add</h2>
       <label for="manualFood">Food</label>
       <input id="manualFood" placeholder="e.g. Greek yogurt bowl" required />
-      <div class="row">
+            <div class="row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label for="manualCalories">Calories</label>
           <input id="manualCalories" type="number" min="0" step="1" placeholder="450" required />
         </div>
         <div>
+          <label for="manualProtein">Protein g</label>
+          <input id="manualProtein" type="number" min="0" step="0.1" placeholder="30" />
+        </div>
+        <div>
+          <label for="manualFat">Fat g</label>
+          <input id="manualFat" type="number" min="0" step="0.1" placeholder="10" />
+        </div>
+      </div>
           <label for="manualProtein">Protein g</label>
           <input id="manualProtein" type="number" min="0" step="0.1" placeholder="30" />
         </div>
@@ -456,7 +465,215 @@
       ...food,
       keywords: food.keywords.map(keyword => keyword.toLowerCase())
     }));
+    // Protein (p) and fat (f) in grams for the food's default serving.
+    // For weight-type foods, p100/f100 = grams per 100 g.
+    const MACRO_DB = {
+      "Egg white": { p: 3.6, f: 0.1 },
+      "Egg": { p: 6.3, f: 4.8 },
+      "Omelette": { p: 11, f: 11 },
+      "Bacon": { p: 6, f: 7 },
+      "Chicken breast": { p100: 31, f100: 3.6 },
+      "Chicken thigh": { p100: 26, f100: 11 },
+      "Turkey": { p100: 30, f100: 1 },
+      "Beef": { p100: 26, f100: 15 },
+      "Pork": { p100: 27, f100: 14 },
+      "Salmon": { p100: 20, f100: 13 },
+      "White fish": { p100: 26, f100: 1 },
+      "Shrimp": { p100: 24, f100: 0.3 },
+      "Tofu": { p100: 8, f100: 5 },
+      "Sausage": { p: 11, f: 13 },
+      "Meatballs": { p: 12, f: 14 },
+      "Chicken nuggets": { p: 13, f: 17 },
+      "Brown rice": { p: 5, f: 1.5 },
+      "White rice": { p: 4, f: 0.5 },
+      "Quinoa": { p: 8, f: 3.5 },
+      "Pasta": { p: 7, f: 1 },
+      "Oatmeal": { p: 5, f: 3 },
+      "Oats": { p: 5, f: 3 },
+      "Cereal": { p: 3, f: 1 },
+      "Granola": { p: 5, f: 9 },
+      "Bread": { p: 3, f: 1 },
+      "Bagel": { p: 10, f: 1.5 },
+      "Tortilla": { p: 4, f: 3 },
+      "Pancake": { p: 5, f: 5 },
+      "Waffle": { p: 6, f: 10 },
+      "Croissant": { p: 5, f: 12 },
+      "Greek yogurt": { p: 15, f: 3 },
+      "Yogurt": { p: 8, f: 8 },
+      "Cottage cheese": { p: 25, f: 5 },
+      "Milk": { p: 8, f: 4.8 },
+      "Soy milk": { p: 7, f: 4 },
+      "Cheese": { p: 7, f: 9 },
+      "Cream cheese": { p: 1, f: 5 },
+      "Butter": { p: 0.1, f: 11.5 },
+      "Olive oil": { p: 0, f: 14 },
+      "Mayonnaise": { p: 0, f: 10 },
+      "Dressing": { p: 0.5, f: 7 },
+      "Peanut butter": { p: 4, f: 8 },
+      "Protein powder": { p: 24, f: 1.5 },
+      "Protein shake": { p: 30, f: 3 },
+      "Smoothie": { p: 5, f: 3 },
+      "Latte": { p: 8, f: 4 },
+      "Banana": { p: 1.3, f: 0.4 },
+      "Apple": { p: 0.5, f: 0.3 },
+      "Orange": { p: 1.2, f: 0.2 },
+      "Berries": { p: 1, f: 0.5 },
+      "Grapes": { p: 1, f: 0.3 },
+      "Mango": { p: 1, f: 0.5 },
+      "Avocado": { p: 3, f: 22 },
+      "Sweet potato": { p: 2, f: 0 },
+      "Potato": { p: 4, f: 0 },
+      "Broccoli": { p: 2.5, f: 0.3 },
+      "Carrot": { p: 0.5, f: 0 },
+      "Corn": { p: 5, f: 2 },
+      "Peas": { p: 8, f: 0.5 },
+      "Vegetables": { p: 2, f: 2 },
+      "Salad": { p: 2, f: 6 },
+      "Fruit": { p: 1, f: 0.3 },
+      "Beans": { p: 9, f: 1 },
+      "Lentils": { p: 12, f: 0.5 },
+      "Chickpeas": { p: 10, f: 3 },
+      "Almonds": { p: 6, f: 15 },
+      "Peanuts": { p: 7, f: 14 },
+      "Walnuts": { p: 4, f: 18 },
+      "Nuts": { p: 5, f: 15 },
+      "Protein bar": { p: 20, f: 7 },
+      "Granola bar": { p: 3, f: 5 },
+      "Chips": { p: 2, f: 10 },
+      "Popcorn": { p: 3, f: 3 },
+      "Crackers": { p: 2, f: 5 },
+      "Pizza": { p: 12, f: 10 },
+      "Burger": { p: 25, f: 25 },
+      "Hot dog": { p: 6, f: 13 },
+      "Sandwich": { p: 18, f: 12 },
+      "Burrito": { p: 25, f: 20 },
+      "Taco": { p: 10, f: 11 },
+      "Fries": { p: 4, f: 15 },
+      "Sushi": { p: 10, f: 3 },
+      "Dumpling": { p: 8, f: 7 },
+      "Soup": { p: 6, f: 5 },
+      "Chili": { p: 15, f: 10 },
+      "Cookie": { p: 2, f: 7 },
+      "Cake": { p: 4, f: 15 },
+      "Brownie": { p: 3, f: 11 },
+      "Ice cream": { p: 2.5, f: 7 },
+      "Chocolate": { p: 1, f: 6 },
+      "Dessert": { p: 3, f: 10 },
+      "Onion": { p: 1, f: 0 },
+      "Roti / Chapati": { p: 3.5, f: 1 },
+      "Butter roti": { p: 3.5, f: 4 },
+      "Naan": { p: 8, f: 5 },
+      "Butter naan": { p: 8, f: 9 },
+      "Garlic naan": { p: 8, f: 10 },
+      "Paratha": { p: 6, f: 10 },
+      "Aloo paratha": { p: 7, f: 14 },
+      "Poori": { p: 3, f: 8 },
+      "Bhatura": { p: 8, f: 18 },
+      "Chicken biryani": { p100: 8, f100: 5 },
+      "Veg biryani": { p100: 3, f100: 4 },
+      "Pulao": { p: 10, f: 14 },
+      "Jeera rice": { p: 4, f: 6 },
+      "Curd rice": { p: 6, f: 8 },
+      "Lemon rice": { p: 5, f: 10 },
+      "Dal": { p: 9, f: 4 },
+      "Dal makhani": { p: 12, f: 15 },
+      "Rajma": { p: 13, f: 6 },
+      "Chana masala": { p: 12, f: 8 },
+      "Sambar": { p: 6, f: 3 },
+      "Rasam": { p: 2, f: 1 },
+      "Palak paneer": { p: 14, f: 20 },
+      "Paneer butter masala": { p: 16, f: 27 },
+      "Kadai paneer": { p: 16, f: 26 },
+      "Mattar paneer": { p: 14, f: 20 },
+      "Paneer": { p100: 18, f100: 20 },
+      "Butter chicken": { p: 30, f: 30 },
+      "Chicken tikka masala": { p: 30, f: 26 },
+      "Chicken curry": { p: 25, f: 17 },
+      "Egg curry": { p: 13, f: 18 },
+      "Fish curry": { p: 22, f: 14 },
+      "Korma": { p: 15, f: 25 },
+      "Vindaloo": { p: 22, f: 20 },
+      "Rogan josh": { p: 25, f: 24 },
+      "Tandoori chicken": { p: 25, f: 12 },
+      "Chicken tikka": { p: 30, f: 15 },
+      "Aloo gobi": { p: 4, f: 9 },
+      "Jeera aloo": { p: 4, f: 10 },
+      "Bhindi masala": { p: 3, f: 10 },
+      "Baingan bharta": { p: 4, f: 12 },
+      "Mixed vegetable curry": { p: 4, f: 8 },
+      "Samosa": { p: 4, f: 14 },
+      "Pakora": { p: 6, f: 15 },
+      "Vada pav": { p: 7, f: 13 },
+      "Pav bhaji": { p: 10, f: 20 },
+      "Masala dosa": { p: 9, f: 8 },
+      "Dosa": { p: 5, f: 2 },
+      "Idli": { p: 5, f: 0.5 },
+      "Medu vada": { p: 6, f: 14 },
+      "Upma": { p: 4, f: 5 },
+      "Poha": { p: 4, f: 8 },
+      "Pani puri": { p: 4, f: 10 },
+      "Bhel puri": { p: 6, f: 8 },
+      "Sev puri": { p: 6, f: 12 },
+      "Chaat": { p: 6, f: 12 },
+      "Dhokla": { p: 6, f: 4 },
+      "Kachori": { p: 5, f: 16 },
+      "Veg thali": { p: 25, f: 30 },
+      "Gulab jamun": { p: 2, f: 6 },
+      "Rasgulla": { p: 2, f: 1 },
+      "Kheer": { p: 8, f: 10 },
+      "Gajar halwa": { p100: 3, f100: 15 },
+      "Jalebi": { p: 1, f: 7 },
+      "Barfi": { p: 3, f: 5 },
+      "Laddoo": { p: 4, f: 9 },
+      "Kulfi": { p: 6, f: 12 },
+      "Masala chai": { p: 2, f: 2 },
+      "Chai": { p: 2, f: 2 },
+      "Filter coffee": { p: 3, f: 3 },
+      "Lassi": { p: 8, f: 5 },
+      "Chaas": { p: 3, f: 2 },
+      "Curd / Dahi": { p: 8, f: 5 },
+      "Raita": { p: 4, f: 4 },
+      "Ghee": { p: 0, f: 14 },
+      "Coconut chutney": { p: 1, f: 7 },
+      "Green chutney": { p: 1, f: 1 },
+      "Tamarind chutney": { p: 0.5, f: 0 },
+      "Pickle / Achar": { p: 0.5, f: 3 },
+      "Papad": { p: 3, f: 2 },
+      "Maggi": { p: 8, f: 14 }
+    };
 
+    function estimateMacros(food, calories) {
+      const m = food ? MACRO_DB[food.name] : null;
+
+      if (!m || !Number.isFinite(calories) || calories <= 0) {
+        return { protein: null, fat: null };
+      }
+
+      let refCal = null;
+      let refP = null;
+      let refF = null;
+
+      if (m.p100 != null && food.per100g) {
+        refCal = food.per100g;
+        refP = m.p100;
+        refF = m.f100;
+      } else if (m.p != null) {
+        refCal = food.defaultCalories != null ? food.defaultCalories : food.unitCalories;
+        refP = m.p;
+        refF = m.f;
+      }
+
+      if (!refCal || refCal <= 0) {
+        return { protein: null, fat: null };
+      }
+
+      const factor = calories / refCal;
+
+      return {
+        protein: refP != null ? Math.round(refP * factor * 10) / 10 : null,
+        fat: refF != null ? Math.round(refF * factor * 10) / 10 : null
+      };
+    }
     const dateEl = document.getElementById("date");
     const goalEl = document.getElementById("goal");
     const foodStatEl = document.getElementById("foodStat");
@@ -477,6 +694,8 @@
     const manualFoodEl = document.getElementById("manualFood");
     const manualCaloriesEl = document.getElementById("manualCalories");
     const manualProteinEl = document.getElementById("manualProtein");
+        const manualFatEl = document.getElementById("manualFat");
+    const macroSummaryEl = document.getElementById("macroSummary");
     const manualNotesEl = document.getElementById("manualNotes");
 
     const openrouterKeyEl = document.getElementById("openrouterKey");
@@ -578,7 +797,14 @@
       const percent = goal > 0 ? Math.min(100, (Math.max(0, net) / goal) * 100) : 0;
       barEl.style.width = percent + "%";
       barEl.classList.toggle("over", net > goal);
+      const proteinTotal = list.reduce((s, e) => s + (isExercise(e) ? 0 : Number(e.protein || 0)), 0);
+      const fatTotal = list.reduce((s, e) => s + (isExercise(e) ? 0 : Number(e.fat || 0)), 0);
 
+      if (macroSummaryEl) {
+        macroSummaryEl.textContent = (proteinTotal || fatTotal)
+          ? `Today: ${Math.round(proteinTotal)} g protein • ${Math.round(fatTotal)} g fat`
+          : "";
+      }
       entriesEl.innerHTML = "";
 
       if (!list.length) {
@@ -614,8 +840,9 @@
         const meta = document.createElement("div");
         meta.className = "muted";
         const proteinText = entry.protein ? ` • ${entry.protein}g protein` : "";
+        const fatText = entry.fat ? ` • ${entry.fat}g fat` : "";
         const minutesText = entry.minutes ? ` • ${entry.minutes} min` : "";
-        meta.textContent = `${entry.time || ""}${proteinText}${minutesText}`;
+        meta.textContent = `${entry.time || ""}${proteinText}${fatText}${minutesText}`;
 
         const actions = document.createElement("div");
         actions.style.marginTop = "10px";
@@ -1041,11 +1268,15 @@
         if (/large|double|extra|fried|creamy|cheesy|burger|burrito|dessert|cake|pizza|pasta|sandwich/.test(lower)) calories *= 1.25;
       }
 
+       const macros = estimateMacros(food, Math.max(0, calories));
+
       return {
-        known: false, name: text, original: text, qty, unit,
-        calories: Math.max(0, calories), defaultUsed: true
+        known: true, name: food.name, original: text, qty, unit,
+        calories: Math.max(0, calories),
+        protein: macros.protein,
+        fat: macros.fat,
+        defaultUsed: !explicitQty, withContext
       };
-    }
 
     function estimatePiece(piece, withContext = false) {
       const text = piece.trim();
@@ -1140,7 +1371,17 @@
 
         const detail = document.createElement("div");
         detail.className = "preview-note";
-        detail.textContent = estimateItemDetail(item);
+
+        let detailText = estimateItemDetail(item);
+
+        if (item.protein != null || item.fat != null) {
+          const macroParts = [];
+          if (item.protein != null) macroParts.push(`P ${item.protein}g`);
+          if (item.fat != null) macroParts.push(`F ${item.fat}g`);
+          detailText += ` • ${macroParts.join(" • ")}`;
+        }
+
+        detail.textContent = detailText;
 
         left.appendChild(title);
         left.appendChild(detail);
@@ -1166,6 +1407,26 @@
       totalRow.appendChild(totalLabel);
       totalRow.appendChild(totalValue);
       estimatePreviewEl.appendChild(totalRow);
+
+      const totalProtein = result.items.reduce((s, i) => s + Number(i.protein || 0), 0);
+      const totalFat = result.items.reduce((s, i) => s + Number(i.fat || 0), 0);
+
+      if (totalProtein > 0 || totalFat > 0) {
+        const macroRow = document.createElement("div");
+        macroRow.className = "preview-total";
+        macroRow.style.borderTop = "0";
+        macroRow.style.paddingTop = "4px";
+
+        const macroLabel = document.createElement("div");
+        macroLabel.textContent = "Protein / Fat";
+
+        const macroValue = document.createElement("div");
+        macroValue.textContent = `${Math.round(totalProtein)} g / ${Math.round(totalFat)} g`;
+
+        macroRow.appendChild(macroLabel);
+        macroRow.appendChild(macroValue);
+        estimatePreviewEl.appendChild(macroRow);
+      }
 
       estimatePreviewEl.hidden = false;
       addOneBtn.disabled = false;
@@ -1283,9 +1544,15 @@
           : raw.portion != null ? raw.portion
           : null;
 
+         const protein = Number(raw.protein_g != null ? raw.protein_g : raw.protein != null ? raw.protein : NaN);
+        const fat = Number(raw.fat_g != null ? raw.fat_g : raw.fat != null ? raw.fat : NaN);
+
         items.push({
           known: true, name, original: name, qty: quantity, unit: null,
-          calories: Math.max(0, calories), defaultUsed: false, withContext: false
+          calories: Math.max(0, calories),
+          protein: Number.isFinite(protein) ? Math.round(protein * 10) / 10 : null,
+          fat: Number.isFinite(fat) ? Math.round(fat * 10) / 10 : null,
+          defaultUsed: false, withContext: false
         });
       }
 
@@ -1330,7 +1597,7 @@ You are a nutrition estimation engine.
 The user will describe a meal. Estimate the calories.
 Return ONLY valid JSON. No markdown. No explanations.
 Use this exact format:
-{"items":[{"name":"food name","quantity":"amount","calories":number}],"total_calories":number}
+{"items":[{"name":"food name","quantity":"amount","calories":number,"protein_g":number,"fat_g":number}],"total_calories":number}
 If unsure, estimate conservatively.`.trim()
             },
             { role: "user", content: text }
@@ -1633,10 +1900,16 @@ If unsure, estimate conservatively.`.trim()
         .map(item => `${item.known ? item.name : item.original}: ${Math.round(item.calories)} cal`)
         .join("\n");
 
+      const mealProtein = lastEstimate.items.reduce((s, i) => s + Number(i.protein || 0), 0);
+      const mealFat = lastEstimate.items.reduce((s, i) => s + Number(i.fat || 0), 0);
+
       entries.push({
         id: uid(), date: dateEl.value, time: nowTime(),
         food: description.slice(0, 90) || "Meal log",
-        calories: total, protein: null, notes, createdAt: Date.now()
+        calories: total,
+        protein: mealProtein > 0 ? Math.round(mealProtein * 10) / 10 : null,
+        fat: mealFat > 0 ? Math.round(mealFat * 10) / 10 : null,
+        notes, createdAt: Date.now()
       });
 
       save();
@@ -1654,7 +1927,9 @@ If unsure, estimate conservatively.`.trim()
         entries.push({
           id: uid(), date: dateEl.value, time: nowTime(),
           food: item.known ? item.name : item.original.slice(0, 80),
-          calories: Math.round(item.calories), protein: null,
+                    calories: Math.round(item.calories),
+          protein: item.protein != null ? item.protein : null,
+          fat: item.fat != null ? item.fat : null,
           notes: description, createdAt: Date.now()
         });
       }
@@ -1708,7 +1983,8 @@ If unsure, estimate conservatively.`.trim()
       entries.push({
         id: uid(), date: dateEl.value, time: nowTime(),
         food: manualFoodEl.value.trim(), calories,
-        protein: manualProteinEl.value ? Number(manualProteinEl.value) : null,
+       protein:manual
+        fat: manualFatEl && manualFatEl.value ? Number(manualFatEl.value) : null,
         notes: manualNotesEl.value.trim(), createdAt: Date.now()
       });
 
@@ -1730,7 +2006,7 @@ If unsure, estimate conservatively.`.trim()
 
     exportBtn.addEventListener("click", () => {
       const list = dayEntries();
-      const rows = [["date", "time", "type", "food", "calories", "protein_g", "notes"]];
+      const rows = [["date", "time", "type", "food", "calories", "protein_g", "fat_g", "notes"]];
 
       for (const entry of list) {
         rows.push([
@@ -1740,6 +2016,7 @@ If unsure, estimate conservatively.`.trim()
           entry.food,
           entry.calories,
           entry.protein || "",
+          entry.fat || "",
           entry.notes || ""
         ]);
       }
