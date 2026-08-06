@@ -89,7 +89,7 @@
 
     <div class="progress"><div id="bar" class="bar"></div></div>
 
-    <section class="card">
+    <section class="card" id="aiSettingsCard">
       <h2>AI settings</h2>
       <label for="openrouterKey">OpenRouter API key</label>
       <input id="openrouterKey" type="password" placeholder="sk-or-v1-..." autocomplete="off" />
@@ -101,6 +101,14 @@
       </div>
       <button id="saveAiSettingsBtn" class="secondary" type="button">Save AI settings</button>
       <div id="aiStatus" class="small-note"></div>
+    </section>
+
+    <section class="card" id="aiSavedBar" hidden>
+      <div class="list-head">
+        <h2>AI settings saved</h2>
+        <button id="editAiSettingsBtn" class="small" type="button">Change</button>
+      </div>
+      <div class="small-note">Meal estimates will use your saved OpenRouter key.</div>
     </section>
 
     <section class="card">
@@ -335,6 +343,9 @@
     const openrouterKeyEl = document.getElementById("openrouterKey");
     const openrouterModelEl = document.getElementById("openrouterModel");
     const saveAiSettingsBtn = document.getElementById("saveAiSettingsBtn");
+    const aiSettingsCardEl = document.getElementById("aiSettingsCard");
+    const aiSavedBarEl = document.getElementById("aiSavedBar");
+    const editAiSettingsBtn = document.getElementById("editAiSettingsBtn");
 
     const weightDateEl = document.getElementById("weightDate");
     const weightValueEl = document.getElementById("weightValue");
@@ -1026,11 +1037,28 @@
     if (openrouterModelEl) {
       openrouterModelEl.value = localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
     }
+
+    function updateAiSettingsVisibility() {
+      const hasKey = getOpenRouterKey().length > 0;
+
+      if (aiSettingsCardEl) aiSettingsCardEl.hidden = hasKey;
+      if (aiSavedBarEl) aiSavedBarEl.hidden = !hasKey;
+    }
+
     if (saveAiSettingsBtn) {
       saveAiSettingsBtn.addEventListener("click", () => {
         localStorage.setItem(OPENROUTER_KEY_STORAGE, openrouterKeyEl ? openrouterKeyEl.value.trim() : "");
         localStorage.setItem(OPENROUTER_MODEL_STORAGE, openrouterModelEl ? openrouterModelEl.value.trim() : "openrouter/free");
+
         setAiStatus("AI settings saved.");
+        updateAiSettingsVisibility();
+      });
+    }
+
+    if (editAiSettingsBtn) {
+      editAiSettingsBtn.addEventListener("click", () => {
+        if (aiSettingsCardEl) aiSettingsCardEl.hidden = false;
+        if (aiSavedBarEl) aiSavedBarEl.hidden = true;
       });
     }
 
@@ -1533,6 +1561,8 @@ If unsure, estimate conservatively.`.trim()
 
     dateEl.value = localToday();
     goalEl.value = goal;
+
+    updateAiSettingsVisibility();
 
     renderWeights();
     render();
