@@ -1,4 +1,4 @@
-const CACHE_NAME = "calorie-journal-v1";
+const CACHE_NAME = "calorie-journal-v2";
 
 const ASSETS = [
   "./",
@@ -11,9 +11,7 @@ const ASSETS = [
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return Promise.allSettled(
-        ASSETS.map(asset => cache.add(asset))
-      );
+      return Promise.allSettled(ASSETS.map(asset => cache.add(asset)));
     })
   );
 
@@ -41,11 +39,7 @@ self.addEventListener("fetch", event => {
 
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(event.request)
+      const network = fetch(event.request)
         .then(response => {
           if (
             response &&
@@ -61,17 +55,9 @@ self.addEventListener("fetch", event => {
 
           return response;
         })
-        .catch(async () => {
-          if (event.request.mode === "navigate") {
-            const fallback = await caches.match("./index.html");
+        .catch(() => cached);
 
-            if (fallback) {
-              return fallback;
-            }
-          }
-
-          return Response.error();
-        });
+      return cached || network;
     })
   );
 });
