@@ -144,6 +144,39 @@
       <textarea id="manualNotes" placeholder="Optional notes..."></textarea>
       <button class="primary" type="submit">Add manual entry</button>
     </form>
+        <section class="card">
+      <div class="list-head">
+        <h2>💧 Water</h2>
+        <select id="waterUnit" style="width: auto;">
+          <option value="ml">ml</option>
+          <option value="oz">oz</option>
+        </select>
+      </div>
+
+      <div class="actions" style="margin-top: 0;">
+        <button id="waterCupBtn" class="secondary" type="button" style="margin-top: 0;">+ Cup (250 ml)</button>
+        <button id="waterBottleBtn" class="secondary" type="button" style="margin-top: 0;">+ Bottle (500 ml)</button>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="waterCustom">Custom amount</label>
+          <input id="waterCustom" type="number" min="0" step="10" placeholder="300" />
+        </div>
+        <div>
+          <label for="waterGoal">Daily goal</label>
+          <input id="waterGoal" type="number" min="0" step="50" />
+        </div>
+      </div>
+
+      <button id="waterAddBtn" class="primary" type="button">Add water</button>
+
+      <div class="progress" style="margin-top: 12px; margin-bottom: 6px;">
+        <div id="waterBar" class="bar" style="background: #38bdf8;"></div>
+      </div>
+      <div id="waterSummary" class="small-note"></div>
+      <div id="waterList" style="margin-top: 10px;"></div>
+    </section>
 
     <section class="card">
       <div class="list-head">
@@ -1531,7 +1564,10 @@ If unsure, estimate conservatively.`.trim()
       render();
     });
 
-    dateEl.addEventListener("change", render);
+        dateEl.addEventListener("change", () => {
+      render();
+      renderWater();
+    });
 
     exportBtn.addEventListener("click", () => {
       const list = dayEntries();
@@ -1553,7 +1589,153 @@ If unsure, estimate conservatively.`.trim()
       link.click();
       URL.revokeObjectURL(url);
     });
+    // ---------- Water tracking ----------
+    const WATER_KEY = "calorie-journal-water-v1";
+    const WATER_GOAL_KEY = "calorie-journal-water-goal-v1";
+    const WATER_UNIT_KEY = "calorie-journal-water-unit-v1";
 
+    const waterUnitEl = document.getElementById("waterUnit");
+    const waterCupBtn = document.getElementById("waterCupBtn");
+    const waterBottleBtn = document.getElementById("waterBottleBtn");
+    const waterCustomEl = document.getElementById("waterCustom");
+    const waterGoalEl = document.getElementById("waterGoal");
+    const waterAddBtn = document.getElementById("waterAddBtn");
+    const waterBarEl = document.getElementById("waterBar");
+    const waterSummaryEl = document.getElementById("waterSummary");
+    const waterListEl = document.getElementById("waterList");
+
+    let waterEntries = [];
+    try {
+      const parsedWater = JSON.parse(localStorage.getItem(WATER_KEY) || "[]");
+      waterEntries = Array.isArray(parsedWater) ? parsedWater : [];
+    } catch {
+      waterEntries = [];
+    }
+
+    let waterGoalMl = Number(localStorage.getItem(WATER_GOAL_KEY) || 2000);
+    if (!Number.isFinite(waterGoalMl) || waterGoalMl <= 0) waterGoalMl = 2000;
+
+    let waterUnit = localStorage.getItem(WATER_UNIT_KEY) || "ml";
+    if (waterUnit !== "ml" && waterUnit !== "oz") waterUnit = "ml";
+
+    function saveWater() {
+      try {
+        localStorage.setItem(WATER_KEY, JSON.stringify(waterEntries));
+        localStorage.setItem(WATER_GOAL_KEY, String(waterGoalMl));
+        localStorage.setItem(WATER_UNIT_KEY, waterUnit);
+      } catch {}
+    }
+
+    function mlToDisplay(ml) {
+      return waterUnit === "oz" ? ml / 29.5735 : ml;
+    }
+
+    function dayWater() {
+      return waterEntries
+        .filter(w => w.date === dateEl.value)
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    }
+
+    function addWaterMl(ml) {
+      if (!Number.isFinite(ml) || ml <= 0) return;
+
+      waterEntries.push({
+        id: uid(),
+        date: dateEl.value,
+        time: nowTime(),
+        ml: Math.round(ml),
+        createdAt: Date.now()
+      });
+
+      saveWater();
+      renderWater();
+    }
+
+    function renderWater() {
+      if (!waterSummaryEl || !waterBarEl || !waterListEl) return;
+
+      const list = dayWater();
+      const totalMl = list.reduce((sum, w) => sum + Number(w.ml || 0), 0);
+
+      const percent = waterGoalMl > 0
+        ? Math.min(100, (totalMl / waterGoalMl) * 100)
+        : 0;
+      waterBarEl.style.width = percent + "%";
+
+      waterSummaryEl.textContent =
+        `${Math.round(mlToDisplay(totalMl)).toLocaleString()} ${waterUnit} of ` +
+        `${Math.round(mlToDisplay(waterGoalMl)).toLocaleString()} ${waterUnit} • ` +
+        `${list.length} drink${list.length === 1 ? "" : "s"}`;
+
+      waterListEl.innerHTML = "";
+      const recent = list.slice(-6).reverse();
+
+      for (const w of recent) {
+        const row = document.createElement("div");
+        row.className = "preview-item";
+
+        const left = document.createElement("div");
+        left.textContent = `${w.time || ""} — ${Math.round(mlToDisplay(w.ml)).toLocaleString()} ${waterUnit}`;
+
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.type = "button";
+        del.textContent = "Delete";
+        del.onclick = () => {
+          waterEntries = waterEntries.filter(x => x.id !== w.id);
+          saveWater();
+          renderWater();
+        };
+
+        row.appendChild(left);
+        row.appendChild(del);
+        waterListEl.appendChild(row);
+      }
+    }
+
+    if (waterCupBtn) waterCupBtn.addEventListener("click", () => addWaterMl(250));
+    if (waterBottleBtn) waterBottleBtn.addEventListener("click", () => addWaterMl(500));
+
+    if (waterAddBtn) {
+      waterAddBtn.addEventListener("click", () => {
+        const raw = String(waterCustomEl ? waterCustomEl.value : "").trim().replace(",", ".");
+        const value = Number(raw);
+
+        if (!Number.isFinite(value) || value <= 0) {
+          if (waterSummaryEl) {
+            waterSummaryEl.textContent = "Enter an amount first, for example 300";
+          }
+          return;
+        }
+
+        const ml = waterUnit === "oz" ? value * 29.5735 : value;
+        addWaterMl(ml);
+        if (waterCustomEl) waterCustomEl.value = "";
+      });
+    }
+
+    if (waterUnitEl) {
+      waterUnitEl.addEventListener("change", () => {
+        waterUnit = waterUnitEl.value === "oz" ? "oz" : "ml";
+        saveWater();
+        if (waterGoalEl) waterGoalEl.value = Math.round(mlToDisplay(waterGoalMl));
+        renderWater();
+      });
+    }
+
+    if (waterGoalEl) {
+      waterGoalEl.addEventListener("change", () => {
+        const value = Number(waterGoalEl.value);
+        if (!Number.isFinite(value) || value <= 0) return;
+        waterGoalMl = Math.round(waterUnit === "oz" ? value * 29.5735 : value);
+        saveWater();
+        renderWater();
+      });
+    }
+
+    if (waterUnitEl) waterUnitEl.value = waterUnit;
+    if (waterGoalEl) waterGoalEl.value = Math.round(mlToDisplay(waterGoalMl));
+    renderWater();
     // ---------- Init ----------
 
     if (weightDateEl) weightDateEl.value = localToday();
