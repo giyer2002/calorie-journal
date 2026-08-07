@@ -2612,7 +2612,7 @@ Keep "steps" to 4 short items.`.trim()
               model: getOpenRouterModule(),
               temperature: 0.5,
               messages: [
-                { role: "system", content: "You are a friendly, encouraging nutrition coach. Summarize the user's week in 3-4 short sentences. Be kind, practical and specific. No markdown." },
+                                { role: "system", content: "You are a friendly, encouraging nutrition coach. First summarize the user's week in 2-3 short sentences using their actual numbers. Then write 'Next week plan:' and list exactly 3 short practical tips, each on its own line starting with '- ' (for example a daily protein target, a simple movement goal like walks, and one water or meal habit). Be kind and specific. No other markdown." },
                 { role: "user", content: `Daily goal ${goal} cal. Last 7 days: ` + JSON.stringify(days.map(d => ({ date: d.date, net: Math.round(d.net), protein: Math.round(d.protein), fat: Math.round(d.fat), water: d.water, burned: Math.round(d.burn) }))) }
               ]
             })
