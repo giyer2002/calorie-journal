@@ -25,7 +25,7 @@
     .secondary{width:100%;background:#334155;color:#e2e8f0;font-weight:600;margin-top:10px}
     .small{background:#334155;color:#e2e8f0;padding:8px 10px}
     .danger{background:#7f1d1d;color:#fecaca;padding:8px 10px}
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+       .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
     @media(max-width:480px){.stats{grid-template-columns:repeat(2,1fr)}}
     .stat{background:#111827;border:1px solid #334155;border-radius:18px;padding:12px 8px;text-align:center}
     .stat span{display:block;font-size:20px;font-weight:800;margin-bottom:4px}
@@ -79,6 +79,8 @@
       <div class="stat"><span id="burnStat">0</span><small>Exercise</small></div>
       <div class="stat"><span id="goalStat">0</span><small>Goal</small></div>
       <div class="stat"><span id="remaining">0</span><small>Remaining</small></div>
+      <div class="stat"><span id="proteinStat">0</span><small>Protein g</small></div>
+      <div class="stat"><span id="fatStat">0</span><small>Fat g</small></div>
     </section>
 
     <div class="progress"><div id="bar" class="bar"></div></div>
@@ -853,7 +855,10 @@
           ? `Today: ${Math.round(proteinTotal)} g protein • ${Math.round(fatTotal)} g fat`
           : "";
       }
-
+      const proteinStatEl = document.getElementById("proteinStat");
+      const fatStatEl = document.getElementById("fatStat");
+      if (proteinStatEl) proteinStatEl.textContent = Math.round(proteinTotal).toLocaleString();
+      if (fatStatEl) fatStatEl.textContent = Math.round(fatTotal).toLocaleString();
       entriesEl.innerHTML = "";
 
       if (!list.length) {
