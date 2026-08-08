@@ -53,6 +53,9 @@
     .wbar{flex:1;background:#22c55e;border-radius:6px 6px 0 0;min-height:4px}
     .wbar.over{background:#ef4444}
     .wday{flex:1;text-align:center;font-size:11px;opacity:.7}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .chip{background:#0b1220;border:1px solid #475569;border-radius:999px;padding:8px 12px;font-size:14px;color:#e2e8f0}
+    .chip.active{border-color:#22c55e;background:#14532d;color:#dcfce7}
     [hidden]{display:none!important}
   </style>
 </head>
@@ -249,7 +252,7 @@
 
     <div id="viewFridge" hidden>
       <div class="small-note" style="margin-bottom:12px;">
-        Type what’s in your fridge → get Indian recipe ideas. “Log it” adds the meal straight to your journal.
+        Type what’s in your fridge → get recipe ideas for any cuisine. “Log it” adds the meal straight to your journal.
       </div>
 
       <section class="card">
@@ -259,10 +262,19 @@
             <input id="fridgeVegOnly" type="checkbox" style="width:auto;" /> Veg only
           </label>
         </div>
+
+        <div id="cuisineChips" class="chips">
+          <button class="chip active" data-cuisine="indian" type="button">🇮🇳 Indian</button>
+          <button class="chip" data-cuisine="mexican" type="button">🇲🇽 Mexican</button>
+          <button class="chip" data-cuisine="chinese" type="button">🇨🇳 Chinese</button>
+          <button class="chip" data-cuisine="american" type="button">🇺🇸 American</button>
+          <button class="chip" data-cuisine="other" type="button">🌍 Other</button>
+        </div>
+
         <label for="fridgeInput">Ingredients you have (comma separated)</label>
         <textarea id="fridgeInput" placeholder="e.g. paneer, tomato, onion, spinach, rice, curd, eggs"></textarea>
         <div class="small-note">Basic pantry (oil/ghee, salt, spices, onion, garlic, ginger) is assumed.</div>
-        <button id="fridgeBtn" class="primary" type="button">Suggest Indian recipes</button>
+        <button id="fridgeBtn" class="primary" type="button">Suggest recipes</button>
         <div id="fridgeResults" style="margin-top:12px;"></div>
       </section>
     </div>
@@ -698,7 +710,7 @@
     }
 
     // ===== PART 1 ENDS =====
-        // ----- AI proxy (hidden key) -----
+    // ----- AI proxy (hidden key) -----
     const AI_PROXY_URL = "https://thali-ai.giyer2002.workers.dev/"; // ← paste your worker URL here, e.g. https://thali-ai.your-account.workers.dev
 
     async function aiChat(messages, temperature) {
@@ -2119,45 +2131,84 @@ If unsure, estimate conservatively.`.trim()
     if (tabJournalEl) tabJournalEl.addEventListener("click", () => switchView("journal"));
     if (tabFridgeEl) tabFridgeEl.addEventListener("click", () => switchView("fridge"));
 
-    // ---------- Fridge Chef ----------
+    // ---------- Fridge Chef (multi-cuisine) ----------
+    const cuisineChipsEl = document.getElementById("cuisineChips");
+    let fridgeCuisine = "indian";
+
+    if (cuisineChipsEl) {
+      cuisineChipsEl.addEventListener("click", e => {
+        const btn = e.target.closest(".chip");
+        if (!btn) return;
+        fridgeCuisine = btn.dataset.cuisine || "indian";
+        cuisineChipsEl.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === btn));
+      });
+    }
+
     const RECIPE_DB = [
-      { name: "Palak Paneer", veg: true, cal: 280, p: 14, f: 20, time: 30, ing: ["paneer", "spinach", "tomato", "onion", "garlic", "ginger", "cream"] },
-      { name: "Paneer Butter Masala", veg: true, cal: 350, p: 16, f: 27, time: 35, ing: ["paneer", "tomato", "onion", "butter", "cream", "cashew"] },
-      { name: "Mattar Paneer", veg: true, cal: 300, p: 14, f: 20, time: 30, ing: ["paneer", "peas", "tomato", "onion"] },
-      { name: "Kadai Paneer", veg: true, cal: 350, p: 16, f: 26, time: 30, ing: ["paneer", "capsicum", "tomato", "onion"] },
-      { name: "Paneer Bhurji", veg: true, cal: 300, p: 15, f: 22, time: 20, ing: ["paneer", "onion", "tomato", "capsicum"] },
-      { name: "Aloo Gobi", veg: true, cal: 180, p: 4, f: 9, time: 25, ing: ["potato", "cauliflower", "tomato", "onion"] },
-      { name: "Jeera Aloo", veg: true, cal: 200, p: 4, f: 10, time: 20, ing: ["potato", "cumin"] },
-      { name: "Aloo Paratha", veg: true, cal: 280, p: 7, f: 14, time: 30, ing: ["wheat flour", "potato", "onion"] },
-      { name: "Bhindi Masala", veg: true, cal: 150, p: 3, f: 10, time: 25, ing: ["okra", "onion", "tomato"] },
-      { name: "Baingan Bharta", veg: true, cal: 180, p: 4, f: 12, time: 35, ing: ["eggplant", "tomato", "onion", "garlic"] },
-      { name: "Dal Tadka", veg: true, cal: 160, p: 9, f: 4, time: 25, ing: ["toor dal", "tomato", "onion", "garlic", "ghee"] },
-      { name: "Dal Makhani", veg: true, cal: 300, p: 12, f: 15, time: 45, ing: ["urad dal", "rajma", "tomato", "butter", "cream"] },
-      { name: "Palak Dal", veg: true, cal: 170, p: 10, f: 4, time: 25, ing: ["spinach", "toor dal", "garlic"] },
-      { name: "Rajma", veg: true, cal: 220, p: 13, f: 6, time: 40, ing: ["rajma", "tomato", "onion", "ginger"] },
-      { name: "Chana Masala", veg: true, cal: 250, p: 12, f: 8, time: 30, ing: ["chickpeas", "tomato", "onion", "ginger"] },
-      { name: "Kadhi Pakora", veg: true, cal: 250, p: 8, f: 14, time: 40, ing: ["curd", "besan", "onion"] },
-      { name: "Besan Chilla", veg: true, cal: 220, p: 9, f: 8, time: 20, ing: ["besan", "onion", "tomato", "coriander"] },
-      { name: "Moong Dal Chilla", veg: true, cal: 200, p: 10, f: 6, time: 20, ing: ["moong dal", "onion", "ginger"] },
-      { name: "Veg Biryani", veg: true, cal: 500, p: 11, f: 15, time: 50, ing: ["rice", "carrot", "peas", "potato", "onion", "mint"] },
-      { name: "Veg Pulao", veg: true, cal: 450, p: 9, f: 12, time: 35, ing: ["rice", "carrot", "peas", "onion"] },
-      { name: "Veg Fried Rice", veg: true, cal: 350, p: 7, f: 10, time: 25, ing: ["rice", "carrot", "peas", "capsicum", "garlic"] },
-      { name: "Jeera Rice", veg: true, cal: 250, p: 4, f: 6, time: 15, ing: ["rice", "cumin", "ghee"] },
-      { name: "Curd Rice", veg: true, cal: 300, p: 6, f: 8, time: 15, ing: ["rice", "curd"] },
-      { name: "Tomato Rice", veg: true, cal: 320, p: 5, f: 8, time: 25, ing: ["rice", "tomato"] },
-      { name: "Lemon Rice", veg: true, cal: 350, p: 5, f: 10, time: 20, ing: ["rice", "lemon", "peanuts"] },
-      { name: "Masala Dosa", veg: true, cal: 380, p: 9, f: 8, time: 45, ing: ["rice", "urad dal", "potato", "onion"] },
-      { name: "Idli Sambar", veg: true, cal: 300, p: 9, f: 4, time: 45, ing: ["rice", "urad dal", "toor dal", "carrot"] },
-      { name: "Upma", veg: true, cal: 210, p: 4, f: 5, time: 20, ing: ["semolina", "onion", "carrot", "peas"] },
-      { name: "Poha", veg: true, cal: 250, p: 4, f: 8, time: 15, ing: ["poha", "onion", "potato", "peas"] },
-      { name: "Kheer", veg: true, cal: 300, p: 8, f: 10, time: 40, ing: ["milk", "rice", "sugar"] },
-      { name: "Egg Bhurji", veg: false, cal: 220, p: 12, f: 16, time: 15, ing: ["eggs", "onion", "tomato", "capsicum"] },
-      { name: "Egg Curry", veg: false, cal: 250, p: 13, f: 18, time: 25, ing: ["eggs", "tomato", "onion", "ginger", "garlic"] },
-      { name: "Chicken Curry", veg: false, cal: 280, p: 25, f: 17, time: 40, ing: ["chicken", "tomato", "onion", "ginger", "garlic", "curd"] },
-      { name: "Butter Chicken", veg: false, cal: 440, p: 30, f: 30, time: 45, ing: ["chicken", "tomato", "butter", "cream", "cashew", "ginger", "garlic"] },
-      { name: "Chicken Tikka", veg: false, cal: 300, p: 30, f: 15, time: 40, ing: ["chicken", "curd", "ginger", "garlic"] },
-      { name: "Chicken Biryani", veg: false, cal: 600, p: 27, f: 20, time: 60, ing: ["chicken", "rice", "onion", "curd", "mint"] },
-      { name: "Fish Curry", veg: false, cal: 250, p: 22, f: 14, time: 35, ing: ["fish", "tomato", "onion", "coconut"] }
+      { name: "Palak Paneer", veg: true, cal: 280, p: 14, f: 20, time: 30, cuisine: "indian", ing: ["paneer", "spinach", "tomato", "onion", "garlic", "ginger", "cream"] },
+      { name: "Paneer Butter Masala", veg: true, cal: 350, p: 16, f: 27, time: 35, cuisine: "indian", ing: ["paneer", "tomato", "onion", "butter", "cream", "cashew"] },
+      { name: "Mattar Paneer", veg: true, cal: 300, p: 14, f: 20, time: 30, cuisine: "indian", ing: ["paneer", "peas", "tomato", "onion"] },
+      { name: "Kadai Paneer", veg: true, cal: 350, p: 16, f: 26, time: 30, cuisine: "indian", ing: ["paneer", "capsicum", "tomato", "onion"] },
+      { name: "Paneer Bhurji", veg: true, cal: 300, p: 15, f: 22, time: 20, cuisine: "indian", ing: ["paneer", "onion", "tomato", "capsicum"] },
+      { name: "Aloo Gobi", veg: true, cal: 180, p: 4, f: 9, time: 25, cuisine: "indian", ing: ["potato", "cauliflower", "tomato", "onion"] },
+      { name: "Jeera Aloo", veg: true, cal: 200, p: 4, f: 10, time: 20, cuisine: "indian", ing: ["potato", "cumin"] },
+      { name: "Aloo Paratha", veg: true, cal: 280, p: 7, f: 14, time: 30, cuisine: "indian", ing: ["wheat flour", "potato", "onion"] },
+      { name: "Bhindi Masala", veg: true, cal: 150, p: 3, f: 10, time: 25, cuisine: "indian", ing: ["okra", "onion", "tomato"] },
+      { name: "Baingan Bharta", veg: true, cal: 180, p: 4, f: 12, time: 35, cuisine: "indian", ing: ["eggplant", "tomato", "onion", "garlic"] },
+      { name: "Dal Tadka", veg: true, cal: 160, p: 9, f: 4, time: 25, cuisine: "indian", ing: ["toor dal", "tomato", "onion", "garlic", "ghee"] },
+      { name: "Dal Makhani", veg: true, cal: 300, p: 12, f: 15, time: 45, cuisine: "indian", ing: ["urad dal", "rajma", "tomato", "butter", "cream"] },
+      { name: "Palak Dal", veg: true, cal: 170, p: 10, f: 4, time: 25, cuisine: "indian", ing: ["spinach", "toor dal", "garlic"] },
+      { name: "Rajma", veg: true, cal: 220, p: 13, f: 6, time: 40, cuisine: "indian", ing: ["rajma", "tomato", "onion", "ginger"] },
+      { name: "Chana Masala", veg: true, cal: 250, p: 12, f: 8, time: 30, cuisine: "indian", ing: ["chickpeas", "tomato", "onion", "ginger"] },
+      { name: "Kadhi Pakora", veg: true, cal: 250, p: 8, f: 14, time: 40, cuisine: "indian", ing: ["curd", "besan", "onion"] },
+      { name: "Besan Chilla", veg: true, cal: 220, p: 9, f: 8, time: 20, cuisine: "indian", ing: ["besan", "onion", "tomato", "coriander"] },
+      { name: "Moong Dal Chilla", veg: true, cal: 200, p: 10, f: 6, time: 20, cuisine: "indian", ing: ["moong dal", "onion", "ginger"] },
+      { name: "Veg Biryani", veg: true, cal: 500, p: 11, f: 15, time: 50, cuisine: "indian", ing: ["rice", "carrot", "peas", "potato", "onion", "mint"] },
+      { name: "Veg Pulao", veg: true, cal: 450, p: 9, f: 12, time: 35, cuisine: "indian", ing: ["rice", "carrot", "peas", "onion"] },
+      { name: "Jeera Rice", veg: true, cal: 250, p: 4, f: 6, time: 15, cuisine: "indian", ing: ["rice", "cumin", "ghee"] },
+      { name: "Curd Rice", veg: true, cal: 300, p: 6, f: 8, time: 15, cuisine: "indian", ing: ["rice", "curd"] },
+      { name: "Tomato Rice", veg: true, cal: 320, p: 5, f: 8, time: 25, cuisine: "indian", ing: ["rice", "tomato"] },
+      { name: "Lemon Rice", veg: true, cal: 350, p: 5, f: 10, time: 20, cuisine: "indian", ing: ["rice", "lemon", "peanuts"] },
+      { name: "Masala Dosa", veg: true, cal: 380, p: 9, f: 8, time: 45, cuisine: "indian", ing: ["rice", "urad dal", "potato", "onion"] },
+      { name: "Idli Sambar", veg: true, cal: 300, p: 9, f: 4, time: 45, cuisine: "indian", ing: ["rice", "urad dal", "toor dal", "carrot"] },
+      { name: "Upma", veg: true, cal: 210, p: 4, f: 5, time: 20, cuisine: "indian", ing: ["semolina", "onion", "carrot", "peas"] },
+      { name: "Poha", veg: true, cal: 250, p: 4, f: 8, time: 15, cuisine: "indian", ing: ["poha", "onion", "potato", "peas"] },
+      { name: "Kheer", veg: true, cal: 300, p: 8, f: 10, time: 40, cuisine: "indian", ing: ["milk", "rice", "sugar"] },
+      { name: "Egg Bhurji", veg: false, cal: 220, p: 12, f: 16, time: 15, cuisine: "indian", ing: ["eggs", "onion", "tomato", "capsicum"] },
+      { name: "Egg Curry", veg: false, cal: 250, p: 13, f: 18, time: 25, cuisine: "indian", ing: ["eggs", "tomato", "onion", "ginger", "garlic"] },
+      { name: "Chicken Curry", veg: false, cal: 280, p: 25, f: 17, time: 40, cuisine: "indian", ing: ["chicken", "tomato", "onion", "ginger", "garlic", "curd"] },
+      { name: "Butter Chicken", veg: false, cal: 440, p: 30, f: 30, time: 45, cuisine: "indian", ing: ["chicken", "tomato", "butter", "cream", "cashew", "ginger", "garlic"] },
+      { name: "Chicken Tikka", veg: false, cal: 300, p: 30, f: 15, time: 40, cuisine: "indian", ing: ["chicken", "curd", "ginger", "garlic"] },
+      { name: "Chicken Biryani", veg: false, cal: 600, p: 27, f: 20, time: 60, cuisine: "indian", ing: ["chicken", "rice", "onion", "curd", "mint"] },
+      { name: "Fish Curry", veg: false, cal: 250, p: 22, f: 14, time: 35, cuisine: "indian", ing: ["fish", "tomato", "onion", "coconut"] },
+      { name: "Bean Burrito", veg: true, cal: 450, p: 15, f: 12, time: 25, cuisine: "mexican", ing: ["tortilla", "beans", "rice", "cheese", "onion"] },
+      { name: "Cheese Quesadilla", veg: true, cal: 350, p: 15, f: 18, time: 15, cuisine: "mexican", ing: ["tortilla", "cheese", "capsicum", "onion"] },
+      { name: "Mexican Rice", veg: true, cal: 300, p: 6, f: 8, time: 30, cuisine: "mexican", ing: ["rice", "tomato", "onion", "garlic"] },
+      { name: "Guacamole & Chips", veg: true, cal: 400, p: 5, f: 25, time: 15, cuisine: "mexican", ing: ["avocado", "tomato", "onion", "chips"] },
+      { name: "Chicken Fajitas", veg: false, cal: 400, p: 30, f: 15, time: 30, cuisine: "mexican", ing: ["chicken", "capsicum", "onion", "tortilla"] },
+      { name: "Beef Tacos", veg: false, cal: 450, p: 22, f: 22, time: 25, cuisine: "mexican", ing: ["beef", "tortilla", "tomato", "onion", "cheese"] },
+      { name: "Chicken Burrito Bowl", veg: false, cal: 550, p: 30, f: 18, time: 35, cuisine: "mexican", ing: ["chicken", "rice", "beans", "tomato", "cheese"] },
+      { name: "Veg Fried Rice", veg: true, cal: 350, p: 7, f: 10, time: 25, cuisine: "chinese", ing: ["rice", "carrot", "peas", "capsicum", "garlic"] },
+      { name: "Chicken Fried Rice", veg: false, cal: 450, p: 22, f: 14, time: 30, cuisine: "chinese", ing: ["rice", "chicken", "eggs", "peas", "garlic"] },
+      { name: "Veg Chow Mein", veg: true, cal: 400, p: 10, f: 14, time: 25, cuisine: "chinese", ing: ["noodles", "carrot", "capsicum", "garlic"] },
+      { name: "Chicken & Broccoli", veg: false, cal: 350, p: 30, f: 12, time: 25, cuisine: "chinese", ing: ["chicken", "broccoli", "garlic", "ginger"] },
+      { name: "Mapo Tofu", veg: false, cal: 350, p: 18, f: 22, time: 30, cuisine: "chinese", ing: ["tofu", "beef", "garlic", "ginger"] },
+      { name: "Egg Drop Soup", veg: true, cal: 120, p: 8, f: 6, time: 15, cuisine: "chinese", ing: ["eggs", "corn", "garlic"] },
+      { name: "Potstickers (Dumplings)", veg: false, cal: 350, p: 12, f: 12, time: 40, cuisine: "chinese", ing: ["wheat flour", "chicken", "garlic", "ginger"] },
+      { name: "Grilled Cheese", veg: true, cal: 450, p: 18, f: 24, time: 15, cuisine: "american", ing: ["bread", "cheese", "butter"] },
+      { name: "Mac & Cheese", veg: true, cal: 500, p: 20, f: 24, time: 30, cuisine: "american", ing: ["pasta", "cheese", "milk", "butter"] },
+      { name: "Pancakes & Eggs", veg: true, cal: 450, p: 15, f: 18, time: 25, cuisine: "american", ing: ["wheat flour", "eggs", "milk"] },
+      { name: "Cobb Salad", veg: false, cal: 450, p: 30, f: 30, time: 20, cuisine: "american", ing: ["chicken", "eggs", "tomato", "cheese", "avocado"] },
+      { name: "Cheeseburger", veg: false, cal: 650, p: 30, f: 35, time: 25, cuisine: "american", ing: ["beef", "bread", "cheese", "tomato", "onion"] },
+      { name: "BBQ Chicken & Potato", veg: false, cal: 500, p: 35, f: 18, time: 40, cuisine: "american", ing: ["chicken", "potato", "onion"] },
+      { name: "Meatloaf & Mash", veg: false, cal: 550, p: 35, f: 25, time: 60, cuisine: "american", ing: ["beef", "potato", "onion", "eggs"] },
+      { name: "Spaghetti Marinara", veg: true, cal: 450, p: 12, f: 12, time: 30, cuisine: "other", ing: ["pasta", "tomato", "garlic", "onion"] },
+      { name: "Pasta Alfredo", veg: true, cal: 550, p: 18, f: 28, time: 25, cuisine: "other", ing: ["pasta", "cream", "cheese", "butter"] },
+      { name: "Shakshuka", veg: true, cal: 300, p: 15, f: 18, time: 30, cuisine: "other", ing: ["eggs", "tomato", "onion", "capsicum"] },
+      { name: "Hummus Plate", veg: true, cal: 400, p: 12, f: 20, time: 15, cuisine: "other", ing: ["chickpeas", "garlic", "lemon", "bread"] },
+      { name: "Greek Salad", veg: true, cal: 300, p: 10, f: 22, time: 15, cuisine: "other", ing: ["tomato", "onion", "cheese", "olives"] },
+      { name: "Falafel Bowl", veg: true, cal: 500, p: 15, f: 22, time: 40, cuisine: "other", ing: ["chickpeas", "rice", "tomato", "onion"] },
+      { name: "Pizza Margherita", veg: true, cal: 500, p: 18, f: 18, time: 45, cuisine: "other", ing: ["wheat flour", "tomato", "cheese"] }
     ];
 
     function normalizeIngredients(text) {
@@ -2186,11 +2237,12 @@ If unsure, estimate conservatively.`.trim()
       return out;
     }
 
-    function fridgeLocalRecipes(text, vegOnly) {
+    function fridgeLocalRecipes(text, vegOnly, cuisine) {
       const have = normalizeIngredients(text);
       const results = [];
 
       for (const r of RECIPE_DB) {
+        if (r.cuisine !== cuisine) continue;
         if (vegOnly && !r.veg) continue;
 
         const matched = r.ing.filter(i => have.includes(i));
@@ -2209,15 +2261,24 @@ If unsure, estimate conservatively.`.trim()
       return results.slice(0, 5);
     }
 
-    async function fridgeWithAI(text, vegOnly, apiKey, model) {
+    async function fridgeWithAI(text, vegOnly, apiKey, model, cuisine) {
+      const cuisineLabels = {
+        indian: "Indian",
+        mexican: "Mexican",
+        chinese: "Chinese",
+        american: "American",
+        other: "from any world cuisine OTHER than Indian, Mexican, Chinese or American (for example Italian, Mediterranean, Middle Eastern)"
+      };
+      const label = cuisineLabels[cuisine] || "Indian";
+
       const data = await aiChat([
         {
           role: "system",
           content: `
-You are an Indian home-cooking chef.
+You are a home-cooking chef.
 The user lists ingredients they have at home.
-Suggest exactly 3 simple home-style Indian recipes they can make.
-Assume basic pantry items (oil, ghee, salt, common spices, onion, garlic, ginger) are available; put anything beyond that in "also_need".
+Suggest exactly 3 simple home-style ${label} recipes they can make.
+Assume basic pantry items (oil, ghee or butter, salt, common spices, onion, garlic, ginger) are available; put anything beyond that in "also_need".
 ${vegOnly ? "ALL recipes must be vegetarian (no meat, fish, or eggs)." : ""}
 Return ONLY valid JSON, no markdown, in this exact format:
 {"recipes":[{"name":string,"veg":true,"time_min":number,"calories":number,"protein_g":number,"fat_g":number,"uses":[string],"also_need":[string],"steps":[string]}]}
@@ -2251,7 +2312,7 @@ Keep "steps" to 4 short items.`.trim()
       if (!list.length) {
         const msg = document.createElement("div");
         msg.className = "small-note";
-        msg.textContent = "No good matches — try adding a few more ingredients.";
+        msg.textContent = "No good matches for this cuisine — try adding a few more ingredients or pick another cuisine.";
         fridgeResultsEl.appendChild(msg);
         return;
       }
@@ -2333,16 +2394,16 @@ Keep "steps" to 4 short items.`.trim()
           const apiKey = getOpenRouterKey();
 
           if (AI_PROXY_URL || apiKey) {
-            renderRecipes(await fridgeWithAI(text, vegOnly, apiKey, getOpenRouterModule()));
+            renderRecipes(await fridgeWithAI(text, vegOnly, apiKey, getOpenRouterModule(), fridgeCuisine));
           } else {
-            renderRecipes(fridgeLocalRecipes(text, vegOnly));
+            renderRecipes(fridgeLocalRecipes(text, vegOnly, fridgeCuisine));
           }
         } catch (error) {
           console.error(error);
-          renderRecipes(fridgeLocalRecipes(text, vegOnly));
+          renderRecipes(fridgeLocalRecipes(text, vegOnly, fridgeCuisine));
         } finally {
           fridgeBtn.disabled = false;
-          fridgeBtn.textContent = "Suggest Indian recipes";
+          fridgeBtn.textContent = "Suggest recipes";
         }
       });
     }
