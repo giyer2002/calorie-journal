@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fridge Chef — recipes from your fridge</title>
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    :root{color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0}
+    .app{max-width:620px;margin:0 auto;padding:20px}
+    h1{margin:8px 0 4px;font-size:26px}
+    h2{margin:0 0 10px;font-size:18px}
+    .tagline{opacity:.7;font-size:13px;margin-bottom:16px}
+    .card{background:#111827;border:1px solid #334155;border-radius:18px;padding:16px;margin-bottom:16px}
+    label{display:block;font-size:13px;opacity:.75;margin:10px 0 6px}
+    input,textarea,select{width:100%;border:1px solid #475569;background:#0b1220;color:inherit;border-radius:12px;padding:12px;font:inherit}
+    textarea{min-height:90px;resize:vertical}
+    button{border:0;border-radius:12px;padding:12px 14px;font:inherit;cursor:pointer}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .primary{width:100%;background:#22c55e;color:#052e16;font-weight:700;margin-top:14px}
+    .secondary{width:100%;background:#334155;color:#e2e8f0;font-weight:600;margin-top:10px}
+    .small{background:#334155;color:#e2e8f0;padding:8px 10px}
+    .list-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+    .list-head h2{margin:0;font-size:18px}
+    .small-note{opacity:.65;font-size:12px;margin-top:6px}
+    .entry{border:1px solid #334155;border-radius:14px;padding:12px;margin-bottom:10px;background:#0b1220}
+    .entry-top{display:flex;justify-content:space-between;gap:10px;align-items:start}
+    .entry strong{word-break:break-word}
+    .muted{opacity:.72;font-size:14px;margin-top:6px;white-space:pre-wrap;word-break:break-word}
+    .toplink{display:inline-block;margin-bottom:8px;font-size:13px;color:#22c55e;text-decoration:none}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .chip{background:#0b1220;border:1px solid #475569;border-radius:999px;padding:8px 12px;font-size:14px;color:#e2e8f0}
+    .chip.active{border-color:#22c55e;background:#14532d;color:#dcfce7}
+    [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <a class="toplink" href="./index.html">← Open Calorie Journal</a>
+    <h1>🧊 Fridge Chef</h1>
+    <div class="tagline">Type what’s in your fridge → get recipe ideas with calories & macros. Pick a cuisine!</div>
+
+    <section class="card" id="aiCard">
+      <h2>AI settings (optional)</h2>
+      <label for="openrouterKey">OpenRouter API key</label>
+      <input id="openrouterKey" type="password" placeholder="sk-or-v1-..." autocomplete="off" />
+      <label for="openrouterModel">Model</label>
+      <input id="openrouterModel" value="openrouter/free" autocomplete="off" />
+      <div class="small-note">Without a key, the built-in offline recipe matcher is used. With a key (or the shared AI server), you also get step-by-step instructions.</div>
+      <button id="saveAiBtn" class="secondary" type="button">Save AI settings</button>
+      <div id="aiStatus" class="small-note"></div>
+    </section>
+
+    <section class="card" id="aiSavedBar" hidden>
+      <div class="list-head">
+        <h2>AI settings saved</h2>
+        <button id="editAiBtn" class="small" type="button">Change</button>
+      </div>
+      <div class="small-note">Recipes will use your saved OpenRouter key.</div>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>What’s in your fridge?</h2>
+        <label style="margin:0;display:flex;align-items:center;gap:6px;opacity:.8;font-size:13px;">
+          <input id="fridgeVegOnly" type="checkbox" style="width:auto;" /> Veg only
+        </label>
+      </div>
+
+      <div id="cuisineChips" class="chips">
+        <button class="chip active" data-cuisine="indian" type="button">🇮🇳 Indian</button>
+        <button class="chip" data-cuisine="mexican" type="button">🇲🇽 Mexican</button>
+        <button class="chip" data-cuisine="chinese" type="button">🇨🇳 Chinese</button>
+        <button class="chip" data-cuisine="american" type="button">🇺🇸 American</button>
+        <button class="chip" data-cuisine="other" type="button">🌍 Other</button>
+      </div>
+
+      <label for="fridgeInput">Ingredients you have (comma separated)</label>
+      <textarea id="fridgeInput" placeholder="e.g. paneer, tomato, onion, spinach, rice, curd, eggs"></textarea>
+      <div class="small-note">Basic pantry (oil/ghee, salt, spices, onion, garlic, ginger) is assumed.</div>
+      <button id="fridgeBtn" class="primary" type="button">Suggest recipes</button>
+      <div id="fridgeResults" style="margin-top:12px;"></div>
+    </section>
+  </main>
+
+  <script>
+    const OPENROUTER_KEY_STORAGE = "openrouter-key-v1";
+    const OPENROUTER_MODEL_STORAGE = "openrouter-model-v1";
+    const JOURNAL_ENTRIES_KEY = "calorie-journal-entries-v2";
+
+    const AI_PROXY_URL = ""; // ← optional: paste your worker URL here to use the hidden shared key
+
+    const openrouterKeyEl = document.getElementById("openrouterKey");
+    const openrouterModelEl = document.getElementById("openrouterModel");
+    const saveAiBtn = document.getElementById("saveAiBtn");
+    const aiCard = document.getElementById("aiCard");
+    const aiSavedBar = document.getElementById("aiSavedBar");
+    const editAiBtn = document.getElementById("editAiBtn");
+
+    const fridgeInputEl = document.getElementById("fridgeInput");
+    const fridgeBtn = document.getElementById("fridgeBtn");
+    const fridgeResultsEl = document.getElementById("fridgeResults");
+    const fridgeVegOnlyEl = document.getElementById("fridgeVegOnly");
+    const cuisineChipsEl = document.getElementById("cuisineChips");
+
+    let fridgeCuisine = "indian";
+
+    function localToday() {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 10);
+    }
+
+    function nowTime() {
+      const d = new Date();
+      return d.toTimeString().slice(0, 5);
+    }
+
+    function uid() {
+      return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+    }
+
+    function getOpenRouterKey() {
+      const fromInput = openrouterKeyEl ? openrouterKeyEl.value.trim() : "";
+      return fromInput || localStorage.getItem(OPENROUTER_KEY_STORAGE) || "";
+    }
+
+    function getOpenRouterModule() {
+      const fromInput = openrouterModelEl ? openrouterModelEl.value.trim() : "";
+      return fromInput || localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
+    }
+
+    async function aiChat(messages, temperature) {
+      if (AI_PROXY_URL) {
+        const r = await fetch(AI_PROXY_URL + "/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, temperature })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `AI error ${r.status}`);
+        return data;
+      }
+
+      const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getOpenRouterKey()}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": window.location.href || "https://localhost",
+          "X-Title": "Fridge Chef"
+        },
+        body: JSON.stringify({ model: getOpenRouterModule(), temperature, messages })
+      });
+      if (!r.ok) throw new Error((await r.text()) || `OpenRouter error ${r.status}`);
+      return r.json();
+    }
+
+    function updateAiVisibility() {
+      const hasKey = getOpenRouterKey().length > 0;
+      const hasProxy = !!AI_PROXY_URL;
+      const aiOn = hasKey || hasProxy;
+
+      if (aiCard) aiCard.hidden = aiOn;
+      if (aiSavedBar) aiSavedBar.hidden = !aiOn;
+
+      const head = aiSavedBar ? aiSavedBar.querySelector("h2") : null;
+      const note = aiSavedBar ? aiSavedBar.querySelector(".small-note") : null;
+
+      if (hasKey) {
+        if (head) head.textContent = "AI settings saved";
+        if (note) note.textContent = "Recipes will use your saved OpenRouter key.";
+      } else if (hasProxy) {
+        if (head) head.textContent = "AI enabled";
+        if (note) note.textContent = "Recipes use the shared ThaliTally AI server — no key needed on this device.";
+      }
+    }
+
+    if (openrouterKeyEl) openrouterKeyEl.value = localStorage.getItem(OPENROUTER_KEY_STORAGE) || "";
+    if (openrouterModelEl) openrouterModelEl.value = localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
+
+    if (saveAiBtn) {
+      saveAiBtn.addEventListener("click", () => {
+        localStorage.setItem(OPENROUTER_KEY_STORAGE, openrouterKeyEl ? openrouterKeyEl.value.trim() : "");
+        localStorage.setItem(OPENROUTER_MODEL_STORAGE, openrouterModelEl ? openrouterModelEl.value.trim() : "openrouter/free");
+        const s = document.getElementById("aiStatus");
+        if (s) s.textContent = "AI settings saved.";
+        updateAiVisibility();
+      });
+    }
+
+    if (editAiBtn) {
+      editAiBtn.addEventListener("click", () => {
+        if (aiCard) aiCard.hidden = false;
+        if (aiSavedBar) aiSavedBar.hidden = true;
+      });
+    }
+
+    if (cuisineChipsEl) {
+      cuisineChipsEl.addEventListener("click", e => {
+        const btn = e.target.closest(".chip");
+        if (!btn) return;
+        fridgeCuisine = btn.dataset.cuisine || "indian";
+        cuisineChipsEl.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === btn));
+      });
+    }
+
+    function extractJsonFromAi(text) {
+      if (!text) throw new Error("Empty AI response");
+      const trimmed = String(text).trim();
+
+      const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence && fence[1]) {
+        try { return JSON.parse(fence[1].trim()); } catch {}
+      }
+      try { return JSON.parse(trimmed); } catch {}
+
+      const fo = trimmed.indexOf("{");
+      const lo = trimmed.lastIndexOf("}");
+      if (fo !== -1 && lo !== -1 && lo > fo) {
+        try { return JSON.parse(trimmed.slice(fo, lo + 1)); } catch {}
+      }
+      const fa = trimmed.indexOf("[");
+      const la = trimmed.lastIndexOf("]");
+      if (fa !== -1 && la !== -1 && la > fa) {
+        try { return JSON.parse(trimmed.slice(fa, la + 1)); } catch {}
+      }
+      throw new Error("AI response was not valid JSON");
+    }
+
+    const RECIPE_DB = [
+      { name: "Palak Paneer", veg: true, cal: 280, p: 14, f: 20, time: 30, cuisine: "indian", ing: ["paneer", "spinach", "tomato", "onion", "garlic", "ginger", "cream"] },
+      { name: "Paneer Butter Masala", veg: true, cal: 350, p: 16, f: 27, time: 35, cuisine: "indian", ing: ["paneer", "tomato", "onion", "butter", "cream", "cashew"] },
+      { name: "Mattar Paneer", veg: true, cal: 300, p: 14, f: 20, time: 30, cuisine: "indian", ing: ["paneer", "peas", "tomato", "onion"] },
+      { name: "Kadai Paneer", veg: true, cal: 350, p: 16, f: 26, time: 30, cuisine: "indian", ing: ["paneer", "capsicum", "tomato", "onion"] },
+      { name: "Paneer Bhurji", veg: true, cal: 300, p: 15, f: 22, time: 20, cuisine: "indian", ing: ["paneer", "onion", "tomato", "capsicum"] },
+      { name: "Aloo Gobi", veg: true, cal: 180, p: 4, f: 9, time: 25, cuisine: "indian", ing: ["potato", "cauliflower", "tomato", "onion"] },
+      { name: "Jeera Aloo", veg: true, cal: 200, p: 4, f: 10, time: 20, cuisine: "indian", ing: ["potato", "cumin"] },
+      { name: "Aloo Paratha", veg: true, cal: 280, p: 7, f: 14, time: 30, cuisine: "indian", ing: ["wheat flour", "potato", "onion"] },
+      { name: "Bhindi Masala", veg: true, cal: 150, p: 3, f: 10, time: 25, cuisine: "indian", ing: ["okra", "onion", "tomato"] },
+      { name: "Baingan Bharta", veg: true, cal: 180, p: 4, f: 12, time: 35, cuisine: "indian", ing: ["eggplant", "tomato", "onion", "garlic"] },
+      { name: "Dal Tadka", veg: true, cal: 160, p: 9, f: 4, time: 25, cuisine: "indian", ing: ["toor dal", "tomato", "onion", "garlic", "ghee"] },
+      { name: "Dal Makhani", veg: true, cal: 300, p: 12, f: 15, time: 45, cuisine: "indian", ing: ["urad dal", "rajma", "tomato", "butter", "cream"] },
+      { name: "Palak Dal", veg: true, cal: 170, p: 10, f: 4, time: 25, cuisine: "indian", ing: ["spinach", "toor dal", "garlic"] },
+      { name: "Rajma", veg: true, cal: 220, p: 13, f: 6, time: 40, cuisine: "indian", ing: ["rajma", "tomato", "onion", "ginger"] },
+      { name: "Chana Masala", veg: true, cal: 250, p: 12, f: 8, time: 30, cuisine: "indian", ing: ["chickpeas", "tomato", "onion", "ginger"] },
+      { name: "Kadhi Pakora", veg: true, cal: 250, p: 8, f: 14, time: 40, cuisine: "indian", ing: ["curd", "besan", "onion"] },
+      { name: "Besan Chilla", veg: true, cal: 220, p: 9, f: 8, time: 20, cuisine: "indian", ing: ["besan", "onion", "tomato", "coriander"] },
+      { name: "Moong Dal Chilla", veg: true, cal: 200, p: 10, f: 6, time: 20, cuisine: "indian", ing: ["moong dal", "onion", "ginger"] },
+      { name: "Veg Biryani", veg: true, cal: 500, p: 11, f: 15, time: 50, cuisine: "indian", ing: ["rice", "carrot", "peas", "potato", "onion", "mint"] },
+      { name: "Veg Pulao", veg: true, cal: 450, p: 9, f: 12, time: 35, cuisine: "indian", ing: ["rice", "carrot", "peas", "onion"] },
+      { name: "Jeera Rice", veg: true, cal: 250, p: 4, f: 6, time: 15, cuisine: "indian", ing: ["rice", "cumin", "ghee"] },
+      { name: "Curd Rice", veg: true, cal: 300, p: 6, f: 8, time: 15, cuisine: "indian", ing: ["rice", "curd"] },
+      { name: "Tomato Rice", veg: true, cal: 320, p: 5, f: 8, time: 25, cuisine: "indian", ing: ["rice", "tomato"] },
+      { name: "Lemon Rice", veg: true, cal: 350, p: 5, f: 10, time: 20, cuisine: "indian", ing: ["rice", "lemon", "peanuts"] },
+      { name: "Masala Dosa", veg: true, cal: 380, p: 9, f: 8, time: 45, cuisine: "indian", ing: ["rice", "urad dal", "potato", "onion"] },
+      { name: "Idli Sambar", veg: true, cal: 300, p: 9, f: 4, time: 45, cuisine: "indian", ing: ["rice", "urad dal", "toor dal", "carrot"] },
+      { name: "Upma", veg: true, cal: 210, p: 4, f: 5, time: 20, cuisine: "indian", ing: ["semolina", "onion", "carrot", "peas"] },
+      { name: "Poha", veg: true, cal: 250, p: 4, f: 8, time: 15, cuisine: "indian", ing: ["poha", "onion", "potato", "peas"] },
+      { name: "Kheer", veg: true, cal: 300, p: 8, f: 10, time: 40, cuisine: "indian", ing: ["milk", "rice", "sugar"] },
+      { name: "Egg Bhurji", veg: false, cal: 220, p: 12, f: 16, time: 15, cuisine: "indian", ing: ["eggs", "onion", "tomato", "capsicum"] },
+      { name: "Egg Curry", veg: false, cal: 250, p: 13, f: 18, time: 25, cuisine: "indian", ing: ["eggs", "tomato", "onion", "ginger", "garlic"] },
+      { name: "Chicken Curry", veg: false, cal: 280, p: 25, f: 17, time: 40, cuisine: "indian", ing: ["chicken", "tomato", "onion", "ginger", "garlic", "curd"] },
+      { name: "Butter Chicken", veg: false, cal: 440, p: 30, f: 30, time: 45, cuisine: "indian", ing: ["chicken", "tomato", "butter", "cream", "cashew", "ginger", "garlic"] },
+      { name: "Chicken Tikka", veg: false, cal: 300, p: 30, f: 15, time: 40, cuisine: "indian", ing: ["chicken", "curd", "ginger", "garlic"] },
+      { name: "Chicken Biryani", veg: false, cal: 600, p: 27, f: 20, time: 60, cuisine: "indian", ing: ["chicken", "rice", "onion", "curd", "mint"] },
+      { name: "Fish Curry", veg: false, cal: 250, p: 22, f: 14, time: 35, cuisine: "indian", ing: ["fish", "tomato", "onion", "coconut"] },
+      { name: "Bean Burrito", veg: true, cal: 450, p: 15, f: 12, time: 25, cuisine: "mexican", ing: ["tortilla", "beans", "rice", "cheese", "onion"] },
+      { name: "Cheese Quesadilla", veg: true, cal: 350, p: 15, f: 18, time: 15, cuisine: "mexican", ing: ["tortilla", "cheese", "capsicum", "onion"] },
+      { name: "Mexican Rice", veg: true, cal: 300, p: 6, f: 8, time: 30, cuisine: "mexican", ing: ["rice", "tomato", "onion", "garlic"] },
+      { name: "Guacamole & Chips", veg: true, cal: 400, p: 5, f: 25, time: 15, cuisine: "mexican", ing: ["avocado", "tomato", "onion", "chips"] },
+      { name: "Chicken Fajitas", veg: false, cal: 400, p: 30, f: 15, time: 30, cuisine: "mexican", ing: ["chicken", "capsicum", "onion", "tortilla"] },
+      { name: "Beef Tacos", veg: false, cal: 450, p: 22, f: 22, time: 25, cuisine: "mexican", ing: ["beef", "tortilla", "tomato", "onion", "cheese"] },
+      { name: "Chicken Burrito Bowl", veg: false, cal: 550, p: 30, f: 18, time: 35, cuisine: "mexican", ing: ["chicken", "rice", "beans", "tomato", "cheese"] },
+      { name: "Veg Fried Rice", veg: true, cal: 350, p: 7, f: 10, time: 25, cuisine: "chinese", ing: ["rice", "carrot", "peas", "capsicum", "garlic"] },
+      { name: "Chicken Fried Rice", veg: false, cal: 450, p: 22, f: 14, time: 30, cuisine: "chinese", ing: ["rice", "chicken", "eggs", "peas", "garlic"] },
+      { name: "Veg Chow Mein", veg: true, cal: 400, p: 10, f: 14, time: 25, cuisine: "chinese", ing: ["noodles", "carrot", "capsicum", "garlic"] },
+      { name: "Chicken & Broccoli", veg: false, cal: 350, p: 30, f: 12, time: 25, cuisine: "chinese", ing: ["chicken", "broccoli", "garlic", "ginger"] },
+      { name: "Mapo Tofu", veg: false, cal: 350, p: 18, f: 22, time: 30, cuisine: "chinese", ing: ["tofu", "beef", "garlic", "ginger"] },
+      { name: "Egg Drop Soup", veg: true, cal: 120, p: 8, f: 6, time: 15, cuisine: "chinese", ing: ["eggs", "corn", "garlic"] },
+      { name: "Potstickers (Dumplings)", veg: false, cal: 350, p: 12, f: 12, time: 40, cuisine: "chinese", ing: ["wheat flour", "chicken", "garlic", "ginger"] },
+      { name: "Grilled Cheese", veg: true, cal: 450, p: 18, f: 24, time: 15, cuisine: "american", ing: ["bread", "cheese", "butter"] },
+      { name: "Mac & Cheese", veg: true, cal: 500, p: 20, f: 24, time: 30, cuisine: "american", ing: ["pasta", "cheese", "milk", "butter"] },
+      { name: "Pancakes & Eggs", veg: true, cal: 450, p: 15, f: 18, time: 25, cuisine: "american", ing: ["wheat flour", "eggs", "milk"] },
+      { name: "Cobb Salad", veg: false, cal: 450, p: 30, f: 30, time: 20, cuisine: "american", ing: ["chicken", "eggs", "tomato", "cheese", "avocado"] },
+      { name: "Cheeseburger", veg: false, cal: 650, p: 30, f: 35, time: 25, cuisine: "american", ing: ["beef", "bread", "cheese", "tomato", "onion"] },
+      { name: "BBQ Chicken & Potato", veg: false, cal: 500, p: 35, f: 18, time: 40, cuisine: "american", ing: ["chicken", "potato", "onion"] },
+      { name: "Meatloaf & Mash", veg: false, cal: 550, p: 35, f: 25, time: 60, cuisine: "american", ing: ["beef", "potato", "onion", "eggs"] },
+      { name: "Spaghetti Marinara", veg: true, cal: 450, p: 12, f: 12, time: 30, cuisine: "other", ing: ["pasta", "tomato", "garlic", "onion"] },
+      { name: "Pasta Alfredo", veg: true, cal: 550, p: 18, f: 28, time: 25, cuisine: "other", ing: ["pasta", "cream", "cheese", "butter"] },
+      { name: "Shakshuka", veg: true, cal: 300, p: 15, f: 18, time: 30, cuisine: "other", ing: ["eggs", "tomato", "onion", "capsicum"] },
+      { name: "Hummus Plate", veg: true, cal: 400, p: 12, f: 20, time: 15, cuisine: "other", ing: ["chickpeas", "garlic", "lemon", "bread"] },
+      { name: "Greek Salad", veg: true, cal: 300, p: 10, f: 22, time: 15, cuisine: "other", ing: ["tomato", "onion", "cheese", "olives"] },
+      { name: "Falafel Bowl", veg: true, cal: 500, p: 15, f: 22, time: 40, cuisine: "other", ing: ["chickpeas", "rice", "tomato", "onion"] },
+      { name: "Pizza Margherita", veg: true, cal: 500, p: 18, f: 18, time: 45, cuisine: "other", ing: ["wheat flour", "tomato", "cheese"] }
+    ];
+
+    function normalizeIngredients(text) {
+      const syn = {
+        palak: "spinach", aloo: "potato", potatoes: "potato", gobi: "cauliflower",
+        bhindi: "okra", baingan: "eggplant", brinjal: "eggplant",
+        chana: "chickpeas", chole: "chickpeas",
+        dahi: "curd", yogurt: "curd",
+        atta: "wheat flour", flour: "wheat flour", sooji: "semolina", rava: "semolina",
+        moong: "moong dal", arhar: "toor dal",
+        dhania: "coriander", pudina: "mint", pyaz: "onion", onions: "onion",
+        tamatar: "tomato", tomatoes: "tomato",
+        egg: "eggs", anda: "eggs", ande: "eggs",
+        prawns: "fish", macchi: "fish", shimla: "capsicum"
+      };
+
+      const out = [];
+      const parts = text.toLowerCase().split(/,|;|\n|\band\b|\+|&/i);
+
+      for (const part of parts) {
+        const clean = part.replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+        if (!clean) continue;
+        if (syn[clean]) out.push(syn[clean]);
+        out.push(clean);
+      }
+      return out;
+    }
+
+    function fridgeLocalRecipes(text, vegOnly, cuisine) {
+      const have = normalizeIngredients(text);
+      const results = [];
+
+      for (const r of RECIPE_DB) {
+        if (r.cuisine !== cuisine) continue;
+        if (vegOnly && !r.veg) continue;
+
+        const matched = r.ing.filter(i => have.includes(i));
+        if (!matched.length) continue;
+
+        results.push({
+          name: r.name, veg: r.veg, time: r.time, cal: r.cal, p: r.p, f: r.f,
+          matched,
+          missing: r.ing.filter(i => !have.includes(i)),
+          steps: [],
+          score: matched.length / r.ing.length
+        });
+      }
+
+      results.sort((a, b) => b.score - a.score || b.matched.length - a.matched.length);
+      return results.slice(0, 5);
+    }
+
+    async function fridgeWithAI(text, vegOnly, cuisine) {
+      const cuisineLabels = {
+        indian: "Indian",
+        mexican: "Mexican",
+        chinese: "Chinese",
+        american: "American",
+        other: "from any world cuisine OTHER than Indian, Mexican, Chinese or American (for example Italian, Mediterranean, Middle Eastern)"
+      };
+      const label = cuisineLabels[cuisine] || "Indian";
+
+      const data = await aiChat([
+        {
+          role: "system",
+          content: `
+You are a home-cooking chef.
+The user lists ingredients they have at home.
+Suggest exactly 3 simple home-style ${label} recipes they can make.
+Assume basic pantry items (oil, ghee or butter, salt, common spices, onion, garlic, ginger) are available; put anything beyond that in "also_need".
+${vegOnly ? "ALL recipes must be vegetarian (no meat, fish, or eggs)." : ""}
+Return ONLY valid JSON, no markdown, in this exact format:
+{"recipes":[{"name":string,"veg":true,"time_min":number,"calories":number,"protein_g":number,"fat_g":number,"uses":[string],"also_need":[string],"steps":[string]}]}
+Keep "steps" to 4 short items.`.trim()
+        },
+        { role: "user", content: "Ingredients I have: " + text }
+      ], 0.4);
+
+      const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+      if (!content) throw new Error("No content");
+
+      const parsed = extractJsonFromAi(content);
+      const raw = Array.isArray(parsed) ? parsed : (parsed.recipes || []);
+
+      return raw.slice(0, 3).map(r => ({
+        name: String(r.name || "Recipe"),
+        veg: !!r.veg,
+        time: Number(r.time_min || 30),
+        cal: Math.round(Number(r.calories || 0)),
+        p: Math.round(Number(r.protein_g || 0)),
+        f: Math.round(Number(r.fat_g || 0)),
+        matched: Array.isArray(r.uses) ? r.uses : [],
+        missing: Array.isArray(r.also_need) ? r.also_need : [],
+        steps: Array.isArray(r.steps) ? r.steps.slice(0, 4) : []
+      }));
+    }
+
+    function logToJournal(r, btn) {
+      let entries = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(JOURNAL_ENTRIES_KEY) || "[]");
+        entries = Array.isArray(parsed) ? parsed : [];
+      } catch { entries = []; }
+
+      entries.push({
+        id: uid(),
+        date: localToday(),
+        time: nowTime(),
+        food: r.name,
+        calories: r.cal,
+        protein: r.p,
+        fat: r.f,
+        notes: "From Fridge Chef",
+        createdAt: Date.now()
+      });
+
+      try { localStorage.setItem(JOURNAL_ENTRIES_KEY, JSON.stringify(entries)); } catch {}
+
+      btn.textContent = "Logged ✓";
+      btn.disabled = true;
+    }
+
+    function renderRecipes(list) {
+      fridgeResultsEl.innerHTML = "";
+
+      if (!list.length) {
+        const msg = document.createElement("div");
+        msg.className = "small-note";
+        msg.textContent = "No good matches for this cuisine — try adding a few more ingredients or pick another cuisine.";
+        fridgeResultsEl.appendChild(msg);
+        return;
+      }
+
+      for (const r of list) {
+        const card = document.createElement("div");
+        card.className = "entry";
+
+        const top = document.createElement("div");
+        top.className = "entry-top";
+
+        const left = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = `${r.veg ? "🌱" : "🍗"} ${r.name}`;
+        left.appendChild(title);
+
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${r.time} min • ${r.cal} cal • P ${r.p}g • F ${r.f}g`;
+        left.appendChild(meta);
+
+        top.appendChild(left);
+
+        const logBtn = document.createElement("button");
+        logBtn.className = "small";
+        logBtn.type = "button";
+        logBtn.textContent = "Log it";
+        logBtn.onclick = () => logToJournal(r, logBtn);
+        top.appendChild(logBtn);
+
+        card.appendChild(top);
+
+        if (r.matched && r.matched.length) {
+          const have = document.createElement("div");
+          have.className = "muted";
+          have.textContent = "You have: " + r.matched.join(", ");
+          card.appendChild(have);
+        }
+
+        if (r.missing && r.missing.length) {
+          const need = document.createElement("div");
+          need.className = "muted";
+          need.textContent = "Also nice: " + r.missing.join(", ");
+          card.appendChild(need);
+        }
+
+        if (r.steps && r.steps.length) {
+          const steps = document.createElement("div");
+          steps.className = "muted";
+          steps.textContent = r.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+          card.appendChild(steps);
+        }
+
+        fridgeResultsEl.appendChild(card);
+      }
+    }
+
+    if (fridgeBtn) {
+      fridgeBtn.addEventListener("click", async () => {
+        const text = fridgeInputEl.value.trim();
+        if (!text) return;
+
+        const vegOnly = !!(fridgeVegOnlyEl && fridgeVegOnlyEl.checked);
+
+        fridgeBtn.disabled = true;
+        fridgeBtn.textContent = "Thinking...";
+
+        try {
+          const apiKey = getOpenRouterKey();
+
+          if (AI_PROXY_URL || apiKey) {
+            renderRecipes(await fridgeWithAI(text, vegOnly, fridgeCuisine));
+          } else {
+            renderRecipes(fridgeLocalRecipes(text, vegOnly, fridgeCuisine));
+          }
+        } catch (error) {
+          console.error(error);
+          renderRecipes(fridgeLocalRecipes(text, vegOnly, fridgeCuisine));
+        } finally {
+          fridgeBtn.disabled = false;
+          fridgeBtn.textContent = "Suggest recipes";
+        }
+      });
+    }
+
+    updateAiVisibility();
+  </script>
+</body>
+</html>
