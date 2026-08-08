@@ -452,7 +452,21 @@ Keep "steps" to 4 short items.`.trim()
         logBtn.type = "button";
         logBtn.textContent = "Log it";
         logBtn.onclick = () => logToJournal(r, logBtn);
-        top.appendChild(logBtn);
+             const linkBtn = document.createElement("a");
+        linkBtn.className = "small";
+        linkBtn.href = "https://www.google.com/search?q=" + encodeURIComponent(r.name + " recipe");
+        linkBtn.target = "_blank";
+        linkBtn.rel = "noopener";
+        linkBtn.textContent = "🔗 Recipe";
+        linkBtn.style.textDecoration = "none";
+
+        const rightBtns = document.createElement("div");
+        rightBtns.style.display = "flex";
+        rightBtns.style.gap = "8px";
+        rightBtns.style.alignItems = "flex-start";
+        rightBtns.appendChild(linkBtn);
+        rightBtns.appendChild(logBtn);
+        top.appendChild(rightBtns);
 
         card.appendChild(top);
 
