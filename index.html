@@ -56,6 +56,9 @@
     .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
     .chip{background:#0b1220;border:1px solid #475569;border-radius:999px;padding:8px 12px;font-size:14px;color:#e2e8f0}
     .chip.active{border-color:#22c55e;background:#14532d;color:#dcfce7}
+        .proteinbar{background:#38bdf8}
+    .fatbar{background:#f59e0b}
+    .fatbar.over{background:#ef4444}
     [hidden]{display:none!important}
   </style>
 </head>
@@ -75,8 +78,20 @@
     <section class="card">
       <label for="date">Date</label>
       <input id="date" type="date" />
-      <label for="goal">Daily calorie goal</label>
-      <input id="goal" type="number" min="0" step="10" />
+      <div class="row" style="grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <label for="goal">Daily calorie goal</label>
+          <input id="goal" type="number" min="0" step="10" />
+        </div>
+        <div>
+          <label for="proteinGoal">Protein goal (g)</label>
+          <input id="proteinGoal" type="number" min="0" step="5" />
+        </div>
+        <div>
+          <label for="fatGoal">Fat goal (g)</label>
+          <input id="fatGoal" type="number" min="0" step="5" />
+        </div>
+      </div>
     </section>
 
     <section class="stats">
@@ -90,7 +105,12 @@
 
     <div class="progress"><div id="bar" class="bar"></div></div>
     <div id="macroSummary" style="margin-bottom:12px;font-size:17px;font-weight:700;"></div>
-
+    <div style="margin-bottom:12px;">
+      <div id="proteinGoalLabel" class="small-note" style="margin:0 0 4px;">Protein 0/100 g</div>
+      <div class="progress" style="height:8px;margin-bottom:8px;"><div id="proteinBar" class="bar proteinbar"></div></div>
+      <div id="fatGoalLabel" class="small-note" style="margin:0 0 4px;">Fat 0/50 g</div>
+      <div class="progress" style="height:8px;margin-bottom:0;"><div id="fatBar" class="bar fatbar"></div></div>
+    </div>
     <section class="card">
       <div class="list-head">
         <h2>📅 Week summary</h2>
@@ -290,7 +310,8 @@
     const WATER_KEY = "calorie-journal-water-v1";
     const WATER_GOAL_KEY = "calorie-journal-water-goal-v1";
     const WATER_UNIT_KEY = "calorie-journal-water-unit-v1";
-
+    const PROTEIN_GOAL_KEY = "calorie-journal-protein-goal-v1";
+    const FAT_GOAL_KEY = "calorie-journal-fat-goal-v1";
     const FOOD_DB = [
       { name: "Diet soda", keywords: ["diet soda", "diet coke", "coke zero", "zero soda"], defaultCalories: 0 },
       { name: "Sweet tea", keywords: ["sweet tea"], defaultCalories: 90, perCup: 90 },
@@ -750,6 +771,12 @@
     const fatStatEl = document.getElementById("fatStat");
     const barEl = document.getElementById("bar");
     const macroSummaryEl = document.getElementById("macroSummary");
+        const proteinGoalEl = document.getElementById("proteinGoal");
+    const fatGoalEl = document.getElementById("fatGoal");
+    const proteinBarEl = document.getElementById("proteinBar");
+    const fatBarEl = document.getElementById("fatBar");
+    const proteinGoalLabelEl = document.getElementById("proteinGoalLabel");
+    const fatGoalLabelEl = document.getElementById("fatGoalLabel");
     const entriesEl = document.getElementById("entries");
     const exportBtn = document.getElementById("exportBtn");
 
@@ -848,7 +875,11 @@
     if (waterUnit !== "ml" && waterUnit !== "oz") waterUnit = "ml";
 
     let lastEstimate = { items: [], total: 0 };
+    let proteinGoal = Number(localStorage.getItem(PROTEIN_GOAL_KEY) || 100);
+    if (!Number.isFinite(proteinGoal)) proteinGoal = 100;
 
+    let fatGoal = Number(localStorage.getItem(FAT_GOAL_KEY) || 50);
+    if (!Number.isFinite(fatGoal)) fatGoal = 50;
     // ----- Utilities -----
     function localToday() {
       const d = new Date();
@@ -869,6 +900,8 @@
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
         localStorage.setItem(GOAL_KEY, String(goal));
+        localStorage.setItem(PROTEIN_GOAL_KEY, String(proteinGoal));
+        localStorage.setItem(FAT_GOAL_KEY, String(fatGoal));
       } catch {}
     }
 
@@ -931,7 +964,17 @@
           ? `Today: ${Math.round(proteinTotal)} g protein • ${Math.round(fatTotal)} g fat`
           : "";
       }
+      if (proteinGoalLabelEl) proteinGoalLabelEl.textContent = `Protein ${Math.round(proteinTotal)}/${Math.round(proteinGoal)} g`;
+      if (fatGoalLabelEl) fatGoalLabelEl.textContent = `Fat ${Math.round(fatTotal)}/${Math.round(fatGoal)} g`;
 
+      if (proteinBarEl) {
+        proteinBarEl.style.width = (proteinGoal > 0 ? Math.min(100, (proteinTotal / proteinGoal) * 100) : 0) + "%";
+      }
+
+      if (fatBarEl) {
+        fatBarEl.style.width = (fatGoal > 0 ? Math.min(100, (fatTotal / fatGoal) * 100) : 0) + "%";
+        fatBarEl.classList.toggle("over", fatTotal > fatGoal);
+      }
       entriesEl.innerHTML = "";
 
       if (!list.length) {
@@ -2650,7 +2693,21 @@ Keep "steps" to 4 short items.`.trim()
       save();
       render();
     });
+    if (proteinGoalEl) {
+      proteinGoalEl.addEventListener("change", () => {
+        proteinGoal = Math.max(0, Number(proteinGoalEl.value || 0));
+        save();
+        render();
+      });
+    }
 
+    if (fatGoalEl) {
+      fatGoalEl.addEventListener("change", () => {
+        fatGoal = Math.max(0, Number(fatGoalEl.value || 0));
+        save();
+        render();
+      });
+    }
     dateEl.addEventListener("change", () => {
       render();
       renderWater();
@@ -2696,7 +2753,8 @@ Keep "steps" to 4 short items.`.trim()
 
     dateEl.value = localToday();
     goalEl.value = goal;
-
+    if (proteinGoalEl) proteinGoalEl.value = proteinGoal;
+    if (fatGoalEl) fatGoalEl.value = fatGoal;
     updateAiSettingsVisibility();
 
     renderWeights();
