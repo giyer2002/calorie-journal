@@ -1554,11 +1554,24 @@
       openrouterModelEl.value = localStorage.getItem(OPENROUTER_MODEL_STORAGE) || "openrouter/free";
     }
 
-    function updateAiSettingsVisibility() {
+      function updateAiSettingsVisibility() {
       const hasKey = getOpenRouterKey().length > 0;
+      const hasProxy = !!AI_PROXY_URL;
+      const aiOn = hasKey || hasProxy;
 
-      if (aiSettingsCardEl) aiSettingsCardEl.hidden = hasKey;
-      if (aiSavedBarEl) aiSavedBarEl.hidden = !hasKey;
+      if (aiSettingsCardEl) aiSettingsCardEl.hidden = aiOn;
+      if (aiSavedBarEl) aiSavedBarEl.hidden = !aiOn;
+
+      const head = aiSavedBarEl ? aiSavedBarEl.querySelector("h2") : null;
+      const note = aiSavedBarEl ? aiSavedBarEl.querySelector(".small-note") : null;
+
+      if (hasKey) {
+        if (head) head.textContent = "AI settings saved";
+        if (note) note.textContent = "Meal estimates will use your saved OpenRouter key.";
+      } else if (hasProxy) {
+        if (head) head.textContent = "AI enabled";
+        if (note) note.textContent = "Estimates use the shared ThaliTally AI server — no key needed on this device.";
+      }
     }
 
     if (saveAiSettingsBtn) {
